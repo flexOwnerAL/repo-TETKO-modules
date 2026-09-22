@@ -2,7 +2,7 @@
   "modules": [
     {
       "file": "DonniAdmins.py",
-      "name": "DonniAdmins",
+      "name": "DonniAdmin",
       "description": "[время] [причина] — заглушить пользователя (ответ на сообщение)",
       "url": "https://raw.githubusercontent.com/flexOwnerAL/repo-TETKO-modules/main/DonniAdmins.py"
     },
@@ -14,19 +14,19 @@
     },
     {
       "file": "pictostories.py",
-      "name": "pictostories",
+      "name": "PicToStories",
       "description": "Делит фото на сетку 3×N и загружает в сторис",
       "url": "https://raw.githubusercontent.com/flexOwnerAL/repo-TETKO-modules/main/pictostories.py"
     },
     {
       "file": "randomedits.py",
-      "name": "randomedits",
+      "name": "RandomEdits",
       "description": "Отправляет случайный эдит",
       "url": "https://raw.githubusercontent.com/flexOwnerAL/repo-TETKO-modules/main/randomedits.py"
     },
     {
       "file": "unicocatalog.py",
-      "name": "unicocatalog",
+      "name": "UnicoCatalog",
       "description": "Случайное медиа из @unico_1213213213",
       "url": "https://raw.githubusercontent.com/flexOwnerAL/repo-TETKO-modules/main/unicocatalog.py"
     }
