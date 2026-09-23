@@ -70,6 +70,17 @@ def warn_key(chat_id: int, user_id: int) -> str:
     return f"{chat_id}:{user_id}"
 
 
+
+async def _safe_edit(event, text, **kwargs):
+    try:
+        return await event.edit(text, **kwargs)
+    except Exception:
+        try:
+            return await event.reply(text, **kwargs)
+        except Exception:
+            return None
+
+
 class DonniAdmin(Module):
     name = "DonniAdmin"
     __compat__ = "0.0.9.0"
@@ -150,7 +161,7 @@ class DonniAdmin(Module):
             text = "❌ <b>Пользователь не найден в чате.</b>"
         else:
             text = f"❌ <b>{type(exc).__name__}:</b> <code>{exc}</code>"
-        await event.edit(text, parse_mode="html")
+        await _safe_edit(event, text, parse_mode="html")
 
     @staticmethod
     def _is_group(event) -> bool:
@@ -162,15 +173,15 @@ class DonniAdmin(Module):
     )
     async def mute_cmd(self, event, args):
         if not self._is_group(event):
-            await event.edit("❌ <b>Команда работает только в группах.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Команда работает только в группах.</b>", parse_mode="html")
             return
 
         _, user = await self._get_reply_user(event)
         if not user:
-            await event.edit("❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
             return
         if not await self._check_can_act(event, user):
-            await event.edit("❌ <b>Нельзя применить действие к этому пользователю.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Нельзя применить действие к этому пользователю.</b>", parse_mode="html")
             return
 
         duration, reason = parse_time_and_reason(self._args(args))
@@ -200,11 +211,11 @@ class DonniAdmin(Module):
     @command(name="unmute", description="снять мут (ответ на сообщение)")
     async def unmute_cmd(self, event, args):
         if not self._is_group(event):
-            await event.edit("❌ <b>Команда работает только в группах.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Команда работает только в группах.</b>", parse_mode="html")
             return
         _, user = await self._get_reply_user(event)
         if not user:
-            await event.edit("❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
             return
 
         try:
@@ -216,14 +227,14 @@ class DonniAdmin(Module):
     @command(name="ban", description="[время] [причина] — заблокировать пользователя (ответ на сообщение)")
     async def ban_cmd(self, event, args):
         if not self._is_group(event):
-            await event.edit("❌ <b>Команда работает только в группах.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Команда работает только в группах.</b>", parse_mode="html")
             return
         _, user = await self._get_reply_user(event)
         if not user:
-            await event.edit("❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
             return
         if not await self._check_can_act(event, user):
-            await event.edit("❌ <b>Нельзя применить действие к этому пользователю.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Нельзя применить действие к этому пользователю.</b>", parse_mode="html")
             return
 
         duration, reason = parse_time_and_reason(self._args(args))
@@ -244,11 +255,11 @@ class DonniAdmin(Module):
     @command(name="unban", description="разблокировать пользователя (ответ на сообщение)")
     async def unban_cmd(self, event, args):
         if not self._is_group(event):
-            await event.edit("❌ <b>Команда работает только в группах.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Команда работает только в группах.</b>", parse_mode="html")
             return
         _, user = await self._get_reply_user(event)
         if not user:
-            await event.edit("❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
             return
 
         try:
@@ -260,14 +271,14 @@ class DonniAdmin(Module):
     @command(name="kick", description="[причина] — кикнуть пользователя из чата (ответ на сообщение)")
     async def kick_cmd(self, event, args):
         if not self._is_group(event):
-            await event.edit("❌ <b>Команда работает только в группах.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Команда работает только в группах.</b>", parse_mode="html")
             return
         _, user = await self._get_reply_user(event)
         if not user:
-            await event.edit("❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
             return
         if not await self._check_can_act(event, user):
-            await event.edit("❌ <b>Нельзя применить действие к этому пользователю.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Нельзя применить действие к этому пользователю.</b>", parse_mode="html")
             return
 
         reason = " ".join(self._args(args)).strip()
@@ -283,14 +294,14 @@ class DonniAdmin(Module):
     @command(name="warn", description="[время_бана] [причина] — выдать предупреждение (ответ на сообщение)")
     async def warn_cmd(self, event, args):
         if not self._is_group(event):
-            await event.edit("❌ <b>Команда работает только в группах.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Команда работает только в группах.</b>", parse_mode="html")
             return
         _, user = await self._get_reply_user(event)
         if not user:
-            await event.edit("❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
             return
         if not await self._check_can_act(event, user):
-            await event.edit("❌ <b>Нельзя применить действие к этому пользователю.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Нельзя применить действие к этому пользователю.</b>", parse_mode="html")
             return
 
         duration, reason = parse_time_and_reason(self._args(args))
@@ -330,11 +341,11 @@ class DonniAdmin(Module):
     @command(name="unwarn", description="сбросить предупреждения пользователя (ответ на сообщение)")
     async def unwarn_cmd(self, event, args):
         if not self._is_group(event):
-            await event.edit("❌ <b>Команда работает только в группах.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Команда работает только в группах.</b>", parse_mode="html")
             return
         _, user = await self._get_reply_user(event)
         if not user:
-            await event.edit("❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
             return
 
         key = warn_key(event.chat_id, user.id)
@@ -345,20 +356,20 @@ class DonniAdmin(Module):
     @command(name="warns", description="посмотреть предупреждения пользователя (ответ на сообщение)")
     async def warns_cmd(self, event, args):
         if not self._is_group(event):
-            await event.edit("❌ <b>Команда работает только в группах.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Команда работает только в группах.</b>", parse_mode="html")
             return
         _, user = await self._get_reply_user(event)
         if not user:
-            await event.edit("❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
+            await _safe_edit(event, "❌ <b>Ответь на сообщение пользователя.</b>", parse_mode="html")
             return
 
         key = warn_key(event.chat_id, user.id)
         count = int(self._warns.get(key, 0))
         mention = self._user_mention(user)
         if count == 0:
-            await event.edit(f"✅ <b>У пользователя {mention} нет предупреждений.</b>", parse_mode="html")
+            await _safe_edit(event, f"✅ <b>У пользователя {mention} нет предупреждений.</b>", parse_mode="html")
         else:
-            await event.edit(
+            await _safe_edit(event, 
                 f"⚠️ <b>Предупреждения {mention}: {count}/{int(self.cfg.get('max_warns', 3))}</b>",
                 parse_mode="html",
             )
