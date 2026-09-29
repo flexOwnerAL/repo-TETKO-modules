@@ -29,6 +29,12 @@
       "name": "UnicoCatalog",
       "description": "Случайное медиа из @unico_1213213213",
       "url": "https://raw.githubusercontent.com/flexOwnerAL/repo-TETKO-modules/main/unicocatalog.py"
+    },
+    {
+      "file": "DontDoThat.py",
+      "name": "DontDoThat",
+      "description": "первая версия, модуль позволяет искать в интернете всякую дичь",
+      "url": "https://raw.githubusercontent.com/flexOwnerAL/repo-TETKO-modules/main/DontDoThat.py"
     }
   ]
 }
