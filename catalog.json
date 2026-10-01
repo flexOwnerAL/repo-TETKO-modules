@@ -31,9 +31,9 @@
       "url": "https://raw.githubusercontent.com/flexOwnerAL/repo-TETKO-modules/main/unicocatalog.py"
     },
     {
-      "file": "DontDoThat.py",
       "name": "DontDoThat",
-      "description": "первая версия, модуль позволяет искать в интернете всякую дичь",
+      "file": "DontDoThat.py",
+      "description": "Public web search with roles, plugins, trust, morfology, boolean ops, readability, backup, audit.",
       "url": "https://raw.githubusercontent.com/flexOwnerAL/repo-TETKO-modules/main/DontDoThat.py"
     }
   ]

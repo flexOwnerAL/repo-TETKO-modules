@@ -1,18 +1,24 @@
 # fuck off anhedonuya, im the leader
 import asyncio
+import copy
+import csv
 import difflib
 import hashlib
+import hmac
 import html
+import io
 import json
 import math
 import random
 import re
+import secrets as _secrets
 import sqlite3
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Optional
-from urllib.parse import quote_plus, urljoin, urlparse
+from urllib.parse import quote_plus, unquote, urljoin, urlparse, parse_qsl, urlencode, urlunparse
 from urllib.request import Request, urlopen, build_opener, ProxyHandler
 
 from core.tetko import Module, command, watcher, loop
@@ -49,22 +55,298 @@ except Exception:
 
 USER_AGENTS_BY_REGION = {
     "ru": [
-        "Mozilla/5.0 (Linux; Android 16; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 YaBrowser/25.2.0.00 Mobile Safari/537.36",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 YaBrowser/25.2.0.00 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 YaBrowser/25.2.0.00 Safari/537.36 Edg/131.0.0.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 YaBrowser/24.12.0.00 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 YaBrowser/24.11.0.00 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 YaBrowser/24.10.0.00 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 YaBrowser/24.9.0.00 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 YaBrowser/24.8.0.00 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 YaBrowser/24.7.0.00 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 YaBrowser/24.6.0.00 Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 16; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 YaBrowser/25.2.0.00 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 16; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 YaBrowser/25.2.0.00 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 15; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 YaBrowser/24.12.0.00 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 15; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 YaBrowser/24.12.0.00 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 YaBrowser/24.11.0.00 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 14; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 YaBrowser/24.10.0.00 Mobile Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 YaBrowser/25.2.0.00 YaBrowser/25.2.0.00 Safari/605.1.15",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 YaBrowser/25.1.0.00 YaBrowser/25.1.0.00 Safari/605.1.15",
+        "Mozilla/5.0 (iPad; CPU OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 YaBrowser/25.2.0.00 YaBrowser/25.2.0.00 Safari/605.1.15",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 YaBrowser/25.2.0.00 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 YaBrowser/25.2.0.00 Safari/537.36",
     ],
     "en": [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 OPR/116.0.0.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+        "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:132.0) Gecko/20100101 Firefox/132.0",
+        "Mozilla/5.0 (X11; Arch Linux; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0",
+        "Mozilla/5.0 (Linux; Android 16; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 16; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 15; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (iPad; CPU OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (iPad; CPU OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Vivaldi/7.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Brave/1.70",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Brave/1.70",
     ],
     "cn": [
         "Mozilla/5.0 (Linux; Android 16; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 16; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 15; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (Linux; Android 16; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36 Quark/7.0",
+        "Mozilla/5.0 (Linux; Android 15; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 UCBrowser/17.0",
     ],
 }
 
 CLOUDFLARE_MARKERS = (
-    "just a moment", "checking your browser", "cf-browser-verification", "cf-challenge",
-    "cf_chl_", "cloudflare", "__cf_chl", "attention required", "ddos protection by cloudflare",
+    "just a moment",
+    "checking your browser",
+    "checking if the site connection is secure",
+    "cf-browser-verification",
+    "cf-challenge",
+    "cf_chl_",
+    "cf_chl_opt",
+    "cf_chl_prog",
+    "cf_chl_2",
+    "__cf_chl",
+    "__cf_chl_rt_tk",
+    "__cf_bm",
+    "__cfduid",
+    "__cfruid",
+    "cf_clearance",
+    "attention required",
+    "ddos protection by cloudflare",
+    "cloudflare ray id",
+    "cloudflare-nginx",
+    "cloudflare.com/cdn-cgi",
+    "cdn-cgi/challenge-platform",
+    "cdn-cgi/trace",
+    "cdn-cgi/l/chk_jschl",
+    "cf-please-wait",
+    "cf-error-details",
+    "ray id:",
+    "performance & security by cloudflare",
+    "please wait while we verify",
+    "verify you are human",
+    "verifying you are human",
+    "enable javascript and cookies to continue",
+    "enable javascript and cookies",
+    "this process is automatic",
+    "your browser will redirect",
+    "one more step",
+    "complete the security check",
+    "verify you are not a robot",
+    "protected by cloudflare",
+    "powered by cloudflare",
+    "cloudflare protection",
+    "cf-verify",
+    "cf_challenge_",
+    "cloudflare_challenge",
+    "web application firewall",
+    "waf by cloudflare",
+    "cloudflare bot management",
+    "bot management by cloudflare",
+    "cloudflare turnstile",
+    "challenges.cloudflare.com",
+    "turnstile challenge",
+    "cf-turnstile",
+    "cf_turnstile",
+    "why have i been blocked",
+    "what can i do to resolve this",
+    "you are unable to access",
+    "the owner of this website has banned your access",
+    "the owner of this website has banned",
+    "access denied | cloudflare",
+    "error 1020",
+    "error 1015",
+    "error 1005",
+    "error 1006",
+    "error 1007",
+    "error 1008",
+    "error 1009",
+    "error 1010",
+    "error 1011",
+    "error 1012",
+    "error 1013",
+    "error 1014",
+    "error 1016",
+    "error 1018",
+    "error 1019",
+    "error 1021",
+    "error 1022",
+    "error 1023",
+    "error 1024",
+    "error 1025",
+    "error 1027",
+    "error 1028",
+    "error 1029",
+    "error 1030",
+    "error 1031",
+    "error 1032",
+    "error 1033",
+    "error 1034",
+    "error 1035",
+    "error 1036",
+    "error 1037",
+    "error 1038",
+    "error 1039",
+    "error 1040",
+    "error 1041",
+    "error 1042",
+    "error 1043",
+    "error 1044",
+    "error 1045",
+    "error 1046",
+    "error 1047",
+    "error 1048",
+    "error 1049",
+    "error 1050",
+    "error 1051",
+    "error 1052",
+    "error 1053",
+    "error 1054",
+    "error 1055",
+    "error 1056",
+    "error 1057",
+    "error 1058",
+    "error 1059",
+    "error 1060",
+    "error 1061",
+    "error 1062",
+    "error 1063",
+    "error 1064",
+    "error 1065",
+    "error 1066",
+    "error 1067",
+    "error 1068",
+    "error 1069",
+    "error 1070",
+    "error 1071",
+    "error 1072",
+    "error 1073",
+    "error 1074",
+    "error 1075",
+    "error 1076",
+    "error 1077",
+    "error 1078",
+    "error 1079",
+    "error 1080",
+    "error 1081",
+    "error 1082",
+    "error 1083",
+    "error 1084",
+    "error 1085",
+    "error 1086",
+    "error 1087",
+    "error 1088",
+    "error 1089",
+    "error 1090",
+    "error 1091",
+    "error 1092",
+    "error 1093",
+    "error 1094",
+    "error 1095",
+    "error 1096",
+    "error 1097",
+    "error 1098",
+    "error 1099",
+    "error 1100",
+    "error 1101",
+    "error 1102",
+    "error 1103",
+    "error 1104",
+    "error 1105",
+    "error 1106",
+    "error 1107",
+    "error 1108",
+    "error 1109",
+    "error 1110",
+    "error 1111",
+    "error 1112",
+    "error 1113",
+    "error 1114",
+    "error 1115",
+    "error 1116",
+    "error 1117",
+    "error 1118",
+    "error 1119",
+    "error 1120",
+    "error 1121",
+    "error 1122",
+    "error 1123",
+    "error 1124",
+    "error 1125",
+    "error 1126",
+    "error 1127",
+    "error 1128",
+    "error 1129",
+    "error 1130",
+    "error 1131",
+    "error 1132",
+    "error 1133",
+    "error 1134",
+    "error 1135",
+    "error 1136",
+    "error 1137",
+    "error 1138",
+    "error 1139",
+    "error 1140",
+    "error 1141",
+    "error 1142",
+    "error 1143",
+    "error 1144",
+    "error 1145",
+    "error 1146",
+    "error 1147",
+    "error 1148",
+    "error 1149",
+    "error 1150",
+    "error 1151",
+    "error 1152",
+    "error 1153",
+    "error 1154",
+    "error 1155",
+    "error 1156",
+    "error 1157",
+    "error 1158",
+    "error 1159",
+    "error 1160",
 )
 
 CAPTCHA_MARKERS = (
@@ -73,6 +355,7 @@ CAPTCHA_MARKERS = (
     "hcaptcha.com", "h-captcha", "are you human", "verify you are human", "verify you are not a robot",
     "unusual traffic", "our systems have detected unusual", "automated queries",
     "верификация", "проверка браузера", "подтвердите, что запросы", "капча",
+    "cf-turnstile", "turnstile challenge", "challenges.cloudflare.com",
 )
 
 JS_MARKERS = (
@@ -94,11 +377,24 @@ PII_REDACTION = (
 )
 
 PRIVATE_HOST_PATTERNS = re.compile(
-    r"^(?:localhost$|127\.|10\.|172\.(?:1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.0\.0\.0$|::1$|fe80:|fc|fd|\.local$)",
+    r"^(?:localhost$"
+    r"|127\."
+    r"|\[::1\]$"
+    r"|::1$"
+    r"|0\.0\.0\.0$"
+    r"|10\."
+    r"|172\.(?:1[6-9]|2\d|3[01])\."
+    r"|192\.168\."
+    r"|169\.254\."
+    r"|fe80:"
+    r"|fc[0-9a-f]{2}:"
+    r"|fd[0-9a-f]{2}:"
+    r"|\.local$"
+    r"|metadata\.google\.internal$"
+    r"|metadata\.goog$"
+    r")",
     re.IGNORECASE,
 )
-
-BLOCKED_URL_SCHEMES = ("javascript:", "file:", "data:", "vbscript:", "about:", "chrome:", "ftp:", "gopher:")
 
 SITE_URL_OVERRIDES = {
     "duckduckgo.com": {"url": "https://lite.duckduckgo.com/lite/?q={query}", "param": "q", "note": "lite.ddg"},
@@ -144,13 +440,13 @@ ROLE_ORDER = {
 
 ROLE_COMMANDS = {
     "guest": {"whoami", "help", "version"},
-    "viewer": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats"},
-    "contributor": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "add-contrib", "pending"},
-    "verified": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "add-contrib", "pending", "search", "multi", "trace", "raw", "retry", "history", "profile", "page", "openall", "json", "save"},
-    "searcher": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "add-contrib", "pending", "search", "multi", "trace", "raw", "retry", "history", "profile", "page", "openall", "json", "save"},
-    "editor": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "add-contrib", "pending", "search", "multi", "trace", "raw", "retry", "history", "profile", "page", "openall", "json", "save", "add", "remove", "enable", "disable", "rename", "clone", "tag", "priority", "ping", "heal", "doctor", "dead", "slow", "watch", "note", "notes", "snapshot", "diff", "export", "audit-me"},
-    "admin": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "add-contrib", "pending", "search", "multi", "trace", "raw", "retry", "history", "profile", "page", "openall", "json", "save", "add", "remove", "enable", "disable", "rename", "clone", "tag", "priority", "ping", "heal", "doctor", "dead", "slow", "watch", "note", "notes", "snapshot", "diff", "export", "audit-me", "logs", "metrics", "audit", "mute", "unmute"},
-    "superadmin": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "add-contrib", "pending", "search", "multi", "trace", "raw", "retry", "history", "profile", "page", "openall", "json", "save", "add", "remove", "enable", "disable", "rename", "clone", "tag", "priority", "ping", "heal", "doctor", "dead", "slow", "watch", "note", "notes", "snapshot", "diff", "export", "audit-me", "logs", "metrics", "audit", "mute", "unmute", "plugin", "plugins", "cfg-get", "import", "impersonate"},
+    "viewer": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "latency"},
+    "contributor": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "latency", "add-contrib", "pending"},
+    "verified": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "latency", "add-contrib", "pending", "search", "multi", "trace", "raw", "retry", "history", "profile", "page", "openall", "json", "save", "saved"},
+    "searcher": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "latency", "add-contrib", "pending", "search", "multi", "trace", "raw", "retry", "history", "profile", "page", "openall", "json", "save", "saved"},
+    "editor": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "latency", "add-contrib", "pending", "search", "multi", "trace", "raw", "retry", "history", "profile", "page", "openall", "json", "save", "saved", "add", "remove", "enable", "disable", "rename", "clone", "tag", "priority", "ping", "heal", "doctor", "dead", "slow", "slow-source", "watch", "note", "notes", "snapshot", "diff", "export", "audit-me"},
+    "admin": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "latency", "add-contrib", "pending", "search", "multi", "trace", "raw", "retry", "history", "profile", "page", "openall", "json", "save", "saved", "add", "remove", "enable", "disable", "rename", "clone", "tag", "priority", "ping", "heal", "doctor", "dead", "slow", "slow-source", "watch", "note", "notes", "snapshot", "diff", "export", "audit-me", "logs", "metrics", "audit", "mute", "unmute"},
+    "superadmin": {"whoami", "help", "version", "sites", "tags", "info", "stat", "top", "dashboard", "my-stats", "latency", "add-contrib", "pending", "search", "multi", "trace", "raw", "retry", "history", "profile", "page", "openall", "json", "save", "saved", "add", "remove", "enable", "disable", "rename", "clone", "tag", "priority", "ping", "heal", "doctor", "dead", "slow", "slow-source", "watch", "note", "notes", "snapshot", "diff", "export", "audit-me", "logs", "metrics", "audit", "mute", "unmute", "plugin", "plugins", "cfg", "import"},
     "owner": None,
 }
 
@@ -158,12 +454,13 @@ ROLE_COMMANDS = {
 class DontDoThat(Module):
     name = "DontDoThat"
     __compat__ = "0.0.9.0"
-    version = "6.7.9"
+    version = "6.8.0"
     author = "@flexOwnerAL"
-    description = "Public web search with extended roles, trusted commands, plugin pipeline, plugin trust system, morfology, boolean operators, readability extractor and audit."
+    description = "Public web search with roles, plugins, trust, morfology, boolean ops, readability, backup, audit."
 
     config = {
         "sites": {},
+        "sites_initialized": False,
         "timeout": 12,
         "max_bytes": 500_000,
         "max_links": 50,
@@ -215,6 +512,7 @@ class DontDoThat(Module):
         "templates": {},
         "webhook_url": "",
         "webhook_secret": "",
+        "webhook_retries": 3,
         "allowed_chats": [],
         "blocked_users": [],
         "trusted_chat_id": None,
@@ -245,9 +543,9 @@ class DontDoThat(Module):
         "role_requires_trusted": False,
         "sites_per_page": 5,
         "trusted_per_page": 5,
-        "use_inline_bot": True,
+        "use_inline_bot": False,
         "inline_cb_ttl": 900,
-        "inline_edit_in_place": True,
+        "inline_edit_in_place": False,
         "menu_ttl": 3600,
         "morphology_enabled": True,
         "readability_enabled": True,
@@ -255,23 +553,50 @@ class DontDoThat(Module):
         "backup_encryption_key": "",
         "plugin_quota_per_minute": 60,
         "source_weight_default": 1.0,
+        "pii_filter_in_snippet": False,
+        "pending_actions_ttl": 86400,
+        "slow_query_threshold": 5.0,
+        "cookie_jar_max": 500,
+        "user_activity_max": 500,
+        "morph_cache_max": 5000,
+        "latency_max_entries": 200,
     }
 
     _RX_URL = re.compile(r"https?://\S+")
     _RX_WORD = re.compile(r"\w+", re.UNICODE)
     _RX_CYR = re.compile(r"[а-яё]", re.IGNORECASE)
-    _RX_FLAG = re.compile(r"--(\w+)(?:=(\S+))?")
+    _RX_FLAG = re.compile(r'--(\w+)(?:=(?:"([^"]*)"|\'([^\']*)\'|(\S+)))?')
     _RX_BARE_URL = re.compile(r"\b([a-zA-Z0-9][a-zA-Z0-9-]*(?:\.[a-zA-Z0-9-]+)+(?:/[^\s]*)?)")
     _RX_QUOTED = re.compile(r'"([^"]+)"')
     _RX_TOKEN = re.compile(r'("(?:[^"\\]|\\.)*"|\(|\)|\bAND\b|\bOR\b|\bNOT\b|[+\-]?\S+)', re.IGNORECASE)
     _RX_WILDCARD = re.compile(r"(\w+)\*")
     _RX_FUZZY = re.compile(r"~(\w+)")
+    _RX_DDG_REDIRECT = re.compile(
+        r"^https?://(?:lite\.|html\.|www\.)?duckduckgo\.com/l/\?[^\"']*?uddg=([^&\s\"']+)",
+        re.IGNORECASE,
+    )
+    _RX_DDG_REDIRECT_INLINE = re.compile(
+        r"https?://(?:lite\.|html\.|www\.)?duckduckgo\.com/l/\?[^\"'\s>]*?uddg=([^&\s\"'>]+)",
+        re.IGNORECASE,
+    )
+    _RX_TITLE = re.compile(r"(?is)<title[^>]*>(.*?)</title>")
+    _RX_OG_TITLE = re.compile(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', re.IGNORECASE)
+    _RX_TW_TITLE = re.compile(r'<meta[^>]+name=["\']twitter:title["\'][^>]+content=["\']([^"\']+)["\']', re.IGNORECASE)
+    _RX_H1 = re.compile(r"(?is)<h1[^>]*>(.*?)</h1>")
 
     def __init__(self, kernel=None):
         super().__init__(kernel)
         self._sem = None
+        self._sem_limit = None
+        self._sem_lock = threading.Lock()
+        self._sqlite_lock = threading.Lock()
+        self._morph_lock = threading.Lock()
+        self._rate_lock = threading.Lock()
         self._cache = {}
-        self._stats = {"total_queries": 0, "total_sources_hit": 0, "top_queries": {}, "per_source": {}, "per_source_fail": {}, "per_user": {}, "latency": {}}
+        self._stats = {
+            "total_queries": 0, "total_sources_hit": 0, "top_queries": {}, "per_source": {},
+            "per_source_fail": {}, "per_user": {}, "latency": {}, "slow_queries": [],
+        }
         self._history = []
         self._audit = []
         self._rate_limit_map = {}
@@ -294,10 +619,13 @@ class DontDoThat(Module):
         self._my_tokens = set()
         self._morph_cache = {}
         self._plugin_quota = {}
+        self._state_loaded = False
         self._load_persistent_state()
 
     async def on_load(self):
-        self._load_persistent_state()
+        if not self._state_loaded:
+            self._load_persistent_state()
+            self._state_loaded = True
         if self.cfg.get("plugins_enabled", True):
             d = self._plugins_dir()
             if d.exists():
@@ -331,7 +659,7 @@ class DontDoThat(Module):
         try:
             data = self.cfg.get("_stats_cache") or {}
             if isinstance(data, dict):
-                for k in ("total_queries", "total_sources_hit", "top_queries", "per_source", "per_source_fail", "per_user", "latency"):
+                for k in ("total_queries", "total_sources_hit", "top_queries", "per_source", "per_source_fail", "per_user", "latency", "slow_queries"):
                     if k in data:
                         self._stats[k] = data[k]
             hist = self.cfg.get("_history_cache") or []
@@ -360,7 +688,12 @@ class DontDoThat(Module):
     def _audit_log(self, actor, action, details=""):
         if not self.cfg.get("audit_log", True):
             return
-        self._audit.append({"ts": time.time(), "actor": str(actor) if actor is not None else "?", "action": action, "details": details[:300]})
+        self._audit.append({
+            "ts": time.time(),
+            "actor": str(actor) if actor is not None else "?",
+            "action": action,
+            "details": details[:300],
+        })
         if len(self._audit) > 2000:
             self._audit = self._audit[-2000:]
 
@@ -369,28 +702,32 @@ class DontDoThat(Module):
             return None
         if self._sqlite is not None:
             return self._sqlite
-        try:
-            path = Path("data/dontdothat.db")
-            path.parent.mkdir(parents=True, exist_ok=True)
-            self._sqlite = sqlite3.connect(str(path), check_same_thread=False)
-            c = self._sqlite
+        with self._sqlite_lock:
+            if self._sqlite is not None:
+                return self._sqlite
             try:
-                c.execute("PRAGMA journal_mode=WAL")
+                path = Path("data/dontdothat.db")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                conn = sqlite3.connect(str(path), check_same_thread=False)
+                try:
+                    conn.execute("PRAGMA journal_mode=WAL")
+                except Exception:
+                    pass
+                conn.execute("CREATE TABLE IF NOT EXISTS fetches (ts REAL, source TEXT, url TEXT, status INTEGER, elapsed REAL, size INTEGER, blocked INTEGER, verdict TEXT)")
+                conn.execute("CREATE TABLE IF NOT EXISTS queries (ts REAL, actor TEXT, query TEXT, hits INTEGER, errors INTEGER)")
+                conn.execute("CREATE TABLE IF NOT EXISTS snapshots (ts REAL, source TEXT, query TEXT, url TEXT, html TEXT)")
+                conn.execute("CREATE TABLE IF NOT EXISTS slow_queries (ts REAL, actor TEXT, query TEXT, elapsed REAL, hits INTEGER)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_fetches_ts ON fetches(ts)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_queries_ts ON queries(ts)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_sq ON snapshots(source, query, ts)")
+                try:
+                    conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS queries_fts USING fts5(query, actor, content='queries', content_rowid='rowid')")
+                except Exception:
+                    pass
+                conn.commit()
+                self._sqlite = conn
             except Exception:
-                pass
-            c.execute("CREATE TABLE IF NOT EXISTS fetches (ts REAL, source TEXT, url TEXT, status INTEGER, elapsed REAL, size INTEGER, blocked INTEGER, verdict TEXT)")
-            c.execute("CREATE TABLE IF NOT EXISTS queries (ts REAL, actor TEXT, query TEXT, hits INTEGER, errors INTEGER)")
-            c.execute("CREATE TABLE IF NOT EXISTS snapshots (ts REAL, source TEXT, query TEXT, url TEXT, html TEXT)")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_fetches_ts ON fetches(ts)")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_queries_ts ON queries(ts)")
-            c.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_sq ON snapshots(source, query, ts)")
-            try:
-                c.execute("CREATE VIRTUAL TABLE IF NOT EXISTS queries_fts USING fts5(query, actor, content='queries', content_rowid='rowid')")
-            except Exception:
-                pass
-            c.commit()
-        except Exception:
-            self._sqlite = None
+                self._sqlite = None
         return self._sqlite
 
     def _sqlite_log_fetch(self, source, url, status, elapsed, size, blocked, verdict):
@@ -398,8 +735,12 @@ class DontDoThat(Module):
         if c is None:
             return
         try:
-            c.execute("INSERT INTO fetches (ts, source, url, status, elapsed, size, blocked, verdict) VALUES (?,?,?,?,?,?,?,?)", (time.time(), source, url[:2000], status, elapsed, size, 1 if blocked else 0, verdict[:200]))
-            c.commit()
+            with self._sqlite_lock:
+                c.execute(
+                    "INSERT INTO fetches (ts, source, url, status, elapsed, size, blocked, verdict) VALUES (?,?,?,?,?,?,?,?)",
+                    (time.time(), source, url[:2000], status, elapsed, size, 1 if blocked else 0, verdict[:200]),
+                )
+                c.commit()
         except Exception:
             pass
 
@@ -408,8 +749,26 @@ class DontDoThat(Module):
         if c is None:
             return
         try:
-            c.execute("INSERT INTO queries (ts, actor, query, hits, errors) VALUES (?,?,?,?,?)", (time.time(), str(actor) if actor is not None else "?", query, hits, errors))
-            c.commit()
+            with self._sqlite_lock:
+                c.execute(
+                    "INSERT INTO queries (ts, actor, query, hits, errors) VALUES (?,?,?,?,?)",
+                    (time.time(), str(actor) if actor is not None else "?", query, hits, errors),
+                )
+                c.commit()
+        except Exception:
+            pass
+
+    def _sqlite_log_slow(self, actor, query, elapsed, hits):
+        c = self._sqlite_conn()
+        if c is None:
+            return
+        try:
+            with self._sqlite_lock:
+                c.execute(
+                    "INSERT INTO slow_queries (ts, actor, query, elapsed, hits) VALUES (?,?,?,?,?)",
+                    (time.time(), str(actor) if actor is not None else "?", query, elapsed, hits),
+                )
+                c.commit()
         except Exception:
             pass
 
@@ -420,16 +779,23 @@ class DontDoThat(Module):
         if c is None:
             return
         try:
-            c.execute("INSERT INTO snapshots (ts, source, query, url, html) VALUES (?,?,?,?,?)", (time.time(), source, query, url, html_text[:500_000]))
-            c.commit()
+            with self._sqlite_lock:
+                c.execute(
+                    "INSERT INTO snapshots (ts, source, query, url, html) VALUES (?,?,?,?,?)",
+                    (time.time(), source, query, url, html_text[:500_000]),
+                )
+                c.commit()
         except Exception:
             pass
 
     def _semaphore(self):
-        if self._sem is None:
-            limit = int(self.cfg.get("max_parallel", 5) or 5)
-            self._sem = asyncio.Semaphore(max(1, limit))
-        return self._sem
+        limit = int(self.cfg.get("max_parallel", 5) or 5)
+        limit = max(1, limit)
+        with self._sem_lock:
+            if self._sem is None or self._sem_limit != limit:
+                self._sem = asyncio.Semaphore(limit)
+                self._sem_limit = limit
+            return self._sem
 
     def _prefix(self):
         try:
@@ -459,24 +825,13 @@ class DontDoThat(Module):
         if sid is None:
             return None
         r = self.cfg.get("roles", {}) or {}
-        if sid in (r.get("superadmins") or []):
-            return "superadmin"
-        if sid in (r.get("admins") or []):
-            return "admin"
-        if sid in (r.get("editors") or []):
-            return "editor"
-        if sid in (r.get("verified") or []):
-            return "verified"
-        if sid in (r.get("contributors") or []):
-            return "contributor"
-        if sid in (r.get("searchers") or []):
-            return "searcher"
-        if sid in (r.get("viewers") or []):
-            return "viewer"
-        if sid in (r.get("guests") or []):
-            return "guest"
-        if sid in (r.get("trusted") or []):
-            return "searcher"
+        for role_key, role_name in (
+            ("superadmins", "superadmin"), ("admins", "admin"), ("editors", "editor"),
+            ("verified", "verified"), ("contributors", "contributor"), ("searchers", "searcher"),
+            ("viewers", "viewer"), ("guests", "guest"), ("trusted", "searcher"),
+        ):
+            if sid in (r.get(role_key) or []):
+                return role_name
         return None
 
     def _role_of_by_uid(self, uid):
@@ -488,24 +843,13 @@ class DontDoThat(Module):
         except Exception:
             pass
         r = self.cfg.get("roles", {}) or {}
-        if uid in (r.get("superadmins") or []):
-            return "superadmin"
-        if uid in (r.get("admins") or []):
-            return "admin"
-        if uid in (r.get("editors") or []):
-            return "editor"
-        if uid in (r.get("verified") or []):
-            return "verified"
-        if uid in (r.get("contributors") or []):
-            return "contributor"
-        if uid in (r.get("searchers") or []):
-            return "searcher"
-        if uid in (r.get("viewers") or []):
-            return "viewer"
-        if uid in (r.get("guests") or []):
-            return "guest"
-        if uid in (r.get("trusted") or []):
-            return "searcher"
+        for role_key, role_name in (
+            ("superadmins", "superadmin"), ("admins", "admin"), ("editors", "editor"),
+            ("verified", "verified"), ("contributors", "contributor"), ("searchers", "searcher"),
+            ("viewers", "viewer"), ("guests", "guest"), ("trusted", "searcher"),
+        ):
+            if uid in (r.get(role_key) or []):
+                return role_name
         return None
 
     def _role_gte(self, role, target):
@@ -527,24 +871,14 @@ class DontDoThat(Module):
         r = self.cfg.get("roles", {}) or {}
         for k in ("superadmins", "admins", "editors", "verified", "contributors", "searchers", "viewers", "guests", "trusted"):
             r[k] = [x for x in (r.get(k) or []) if x != uid]
-        if role == "superadmin":
-            r.setdefault("superadmins", []).append(uid)
-        elif role == "admin":
-            r.setdefault("admins", []).append(uid)
-        elif role == "editor":
-            r.setdefault("editors", []).append(uid)
-        elif role == "verified":
-            r.setdefault("verified", []).append(uid)
-        elif role == "contributor":
-            r.setdefault("contributors", []).append(uid)
-        elif role == "searcher":
-            r.setdefault("searchers", []).append(uid)
-        elif role == "viewer":
-            r.setdefault("viewers", []).append(uid)
-        elif role == "guest":
-            r.setdefault("guests", []).append(uid)
-        elif role == "trusted":
-            r.setdefault("trusted", []).append(uid)
+        mapping = {
+            "superadmin": "superadmins", "admin": "admins", "editor": "editors",
+            "verified": "verified", "contributor": "contributors", "searcher": "searchers",
+            "viewer": "viewers", "guest": "guests", "trusted": "trusted",
+        }
+        key = mapping.get(role)
+        if key:
+            r.setdefault(key, []).append(uid)
         self.cfg.set("roles", r)
 
     def _remove_role(self, uid):
@@ -578,13 +912,16 @@ class DontDoThat(Module):
         data = self.cfg.get("sites", {}) or {}
         if not isinstance(data, dict):
             data = {}
-        if not data and DEFAULT_SITES:
-            data = {k: dict(v) for k, v in DEFAULT_SITES.items()}
+        if not self.cfg.get("sites_initialized", False):
+            if not data and DEFAULT_SITES:
+                data = copy.deepcopy(DEFAULT_SITES)
             self.cfg.set("sites", data)
+            self.cfg.set("sites_initialized", True)
         return data
 
     def _save_sites(self, data):
         self.cfg.set("sites", data)
+        self.cfg.set("sites_initialized", True)
 
     def _args(self, event):
         text = (getattr(event, "raw_text", "") or "").strip()
@@ -608,22 +945,23 @@ class DontDoThat(Module):
             return self._normalize(text)
         norm = self._normalize(text)
         out = []
-        for w in self._RX_WORD.findall(norm):
-            if len(w) <= 2:
-                out.append(w)
-                continue
-            cached = self._morph_cache.get(w)
-            if cached is not None:
-                out.append(cached)
-                continue
-            try:
-                lemma = _MORPH.parse(w)[0].normal_form
-            except Exception:
-                lemma = w
-            self._morph_cache[w] = lemma
-            out.append(lemma)
-            if len(self._morph_cache) > 5000:
-                self._morph_cache = dict(list(self._morph_cache.items())[-2500:])
+        with self._morph_lock:
+            for w in self._RX_WORD.findall(norm):
+                if len(w) <= 2:
+                    out.append(w)
+                    continue
+                cached = self._morph_cache.get(w)
+                if cached is not None:
+                    out.append(cached)
+                    continue
+                try:
+                    lemma = _MORPH.parse(w)[0].normal_form
+                except Exception:
+                    lemma = w
+                self._morph_cache[w] = lemma
+                out.append(lemma)
+                if len(self._morph_cache) > int(self.cfg.get("morph_cache_max", 5000) or 5000):
+                    self._morph_cache = dict(list(self._morph_cache.items())[-2500:])
         return " ".join(out)
 
     def _region_for_url(self, url):
@@ -631,16 +969,15 @@ class DontDoThat(Module):
             host = urlparse(url).netloc.lower()
         except Exception:
             return "en"
-        if host.endswith(".ru") or host.endswith(".рф") or "yandex" in host:
+        if host.endswith(".ru") or host.endswith(".рф") or host.endswith(".su") or host.endswith(".by") or host.endswith(".kz"):
             return "ru"
         if host.endswith(".cn") or "baidu" in host:
             return "cn"
         return "en"
 
     def _pick_ua(self, url):
-        if self.cfg.get("region_ua", True):
-            return random.choice(USER_AGENTS_BY_REGION.get(self._region_for_url(url), USER_AGENTS_BY_REGION["en"]))
-        return random.choice(USER_AGENTS_BY_REGION["en"])
+        pool = USER_AGENTS_BY_REGION.get(self._region_for_url(url), USER_AGENTS_BY_REGION["en"]) if self.cfg.get("region_ua", True) else USER_AGENTS_BY_REGION["en"]
+        return random.choice(pool)
 
     def _is_cloudflare(self, text):
         low = (text or "").lower()
@@ -710,6 +1047,7 @@ class DontDoThat(Module):
             ("author", r'<meta[^>]+name=["\']author["\'][^>]+content=["\']([^"\']+)["\']'),
             ("date", r'<meta[^>]+property=["\']article:published_time["\'][^>]+content=["\']([^"\']+)["\']'),
             ("desc", r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']'),
+            ("canonical", r'<link[^>]+rel=["\']canonical["\'][^>]+href=["\']([^"\']+)["\']'),
         ):
             m = re.search(pattern, raw_html, re.IGNORECASE)
             if m:
@@ -735,9 +1073,12 @@ class DontDoThat(Module):
         for part in path.split("."):
             if cur is None:
                 return None
-            if part.isdigit() and isinstance(cur, list):
-                i = int(part)
-                cur = cur[i] if 0 <= i < len(cur) else None
+            if isinstance(cur, list):
+                try:
+                    i = int(part)
+                    cur = cur[i] if -len(cur) <= i < len(cur) else None
+                except ValueError:
+                    return None
             elif isinstance(cur, dict):
                 cur = cur.get(part)
             else:
@@ -748,11 +1089,12 @@ class DontDoThat(Module):
         wait = float(self.cfg.get("rate_limit_seconds", 0.5) or 0.5)
         if wait <= 0:
             return
-        last = self._rate_limit_map.get(host, 0)
-        delta = time.time() - last
-        if delta < wait:
-            time.sleep(wait - delta)
-        self._rate_limit_map[host] = time.time()
+        with self._rate_lock:
+            last = self._rate_limit_map.get(host, 0)
+            delta = time.time() - last
+            if delta < wait:
+                time.sleep(wait - delta)
+            self._rate_limit_map[host] = time.time()
 
     def _user_rate_ok(self, uid, event=None):
         if uid is None:
@@ -763,22 +1105,23 @@ class DontDoThat(Module):
         if limit <= 0:
             return True
         now = time.time()
-        m = self.cfg.get("user_rate_map", {}) or {}
-        bucket = m.get(str(uid), [])
-        bucket = [t for t in bucket if now - t < 60]
-        if len(bucket) >= limit:
+        with self._rate_lock:
+            m = self.cfg.get("user_rate_map", {}) or {}
+            bucket = m.get(str(uid), [])
+            bucket = [t for t in bucket if now - t < 60]
+            if len(bucket) >= limit:
+                m[str(uid)] = bucket
+                self.cfg.set("user_rate_map", m)
+                return False
+            bucket.append(now)
             m[str(uid)] = bucket
+            if len(m) > 500:
+                cutoff = now - 3600
+                m = {k: v for k, v in m.items() if any(t > cutoff for t in (v or []))}
             self.cfg.set("user_rate_map", m)
-            return False
-        bucket.append(now)
-        m[str(uid)] = bucket
-        if len(m) > 500:
-            cutoff = now - 3600
-            m = {k: v for k, v in m.items() if any(t > cutoff for t in (v or []))}
-        self.cfg.set("user_rate_map", m)
         return True
 
-    def _check_quota(self, uid, action):
+    def _check_quota_pre(self, uid, action):
         quotas = self.cfg.get("trusted_quotas", {}) or {}
         per = quotas.get(str(uid))
         if not per:
@@ -796,13 +1139,29 @@ class DontDoThat(Module):
         cur = int(counts.get(key, 0))
         if cur >= limit:
             return False, f"daily quota exceeded ({cur}/{limit} {key})"
-        counts[key] = cur + 1
+        return True, key
+
+    def _check_quota_commit(self, uid, key):
+        if not key:
+            return
+        used = self.cfg.get("quota_used", {}) or {}
+        today = time.strftime("%Y-%m-%d")
+        bucket = used.get(str(uid)) or {}
+        if bucket.get("date") != today:
+            bucket = {"date": today, "counts": {}}
+        counts = bucket.get("counts") or {}
+        counts[key] = int(counts.get(key, 0)) + 1
         bucket["counts"] = counts
         used[str(uid)] = bucket
         if len(used) > 500:
             used = {k: v for k, v in used.items() if v.get("date") == today}
         self.cfg.set("quota_used", used)
-        return True, None
+
+    def _check_quota(self, uid, action):
+        ok, key = self._check_quota_pre(uid, action)
+        if ok:
+            self._check_quota_commit(uid, key)
+        return ok, None if ok else f"quota exceeded"
 
     def _chat_allowed(self, event):
         allowed = self.cfg.get("allowed_chats", []) or []
@@ -856,6 +1215,11 @@ class DontDoThat(Module):
         if not self.cfg.get("cookies_enabled", True):
             return
         self._cookie_jar[domain] = {"cookie": cookie, "ua": ua, "proxy": proxy or "", "expires": time.time() + 3600 * 6}
+        limit = int(self.cfg.get("cookie_jar_max", 500) or 500)
+        if len(self._cookie_jar) > limit:
+            items = sorted(self._cookie_jar.items(), key=lambda kv: kv[1].get("expires", 0))
+            for k, _ in items[: len(items) // 2]:
+                self._cookie_jar.pop(k, None)
         self._save_persistent_state()
 
     async def _http_request(self, url, headers=None, timeout=None, use_cookie=True):
@@ -896,6 +1260,14 @@ class DontDoThat(Module):
                 async with _CurlSession() as session:
                     r = await session.get(url, headers=h, timeout=t, impersonate="chrome", allow_redirects=True)
                     try:
+                        final_url = str(getattr(r, "url", "") or "")
+                        if final_url and not self._is_ssrf_safe(final_url):
+                            raise ValueError(f"unsafe redirect: {final_url[:100]}")
+                    except ValueError:
+                        raise
+                    except Exception:
+                        pass
+                    try:
                         sc = r.cookies
                         if sc:
                             ck_str = "; ".join(f"{k}={v}" for k, v in sc.items())
@@ -904,6 +1276,8 @@ class DontDoThat(Module):
                     except Exception:
                         pass
                     return (r.text or "")[:max_bytes], r.status_code
+            except ValueError:
+                raise
             except Exception:
                 pass
 
@@ -918,6 +1292,9 @@ class DontDoThat(Module):
                 try:
                     async with httpx.AsyncClient(**kwargs) as client:
                         r = await client.get(url)
+                        final_url = str(r.url)
+                        if final_url and not self._is_ssrf_safe(final_url):
+                            raise ValueError(f"unsafe redirect: {final_url[:100]}")
                         return (r.text or "")[:max_bytes], r.status_code
                 except TypeError:
                     kwargs.pop("proxy", None)
@@ -925,7 +1302,12 @@ class DontDoThat(Module):
                         kwargs["proxies"] = proxy_arg
                     async with httpx.AsyncClient(**kwargs) as client:
                         r = await client.get(url)
+                        final_url = str(r.url)
+                        if final_url and not self._is_ssrf_safe(final_url):
+                            raise ValueError(f"unsafe redirect: {final_url[:100]}")
                         return (r.text or "")[:max_bytes], r.status_code
+            except ValueError:
+                raise
             except Exception:
                 pass
 
@@ -933,15 +1315,19 @@ class DontDoThat(Module):
             req = Request(url, headers=h)
             opener = build_opener(ProxyHandler(proxies)) if proxies else build_opener()
             with opener.open(req, timeout=t) as resp:
+                final_url = resp.geturl()
                 raw = resp.read(max_bytes)
                 cs = resp.headers.get_content_charset() or "utf-8"
                 try:
                     text = raw.decode(cs, errors="ignore")
                 except LookupError:
                     text = raw.decode("utf-8", errors="ignore")
-                return text, resp.status
+                return text, resp.status, final_url
 
-        return await asyncio.to_thread(_sync)
+        text, status, final_url = await asyncio.to_thread(_sync)
+        if final_url and not self._is_ssrf_safe(final_url):
+            raise ValueError(f"unsafe redirect: {final_url[:100]}")
+        return text, status
 
     async def _fetch_async(self, url):
         started = time.time()
@@ -1042,6 +1428,48 @@ class DontDoThat(Module):
         except Exception:
             return None
 
+    def _extract_title_fallback(self, html_raw, url, meta):
+        for rx in (self._RX_OG_TITLE, self._RX_TW_TITLE):
+            try:
+                m = rx.search(html_raw)
+                if m:
+                    t = html.unescape(re.sub(r"\s+", " ", m.group(1))).strip()
+                    if t:
+                        return t
+            except Exception:
+                continue
+        try:
+            m = self._RX_TITLE.search(html_raw)
+            if m:
+                t = html.unescape(re.sub(r"<[^>]+>", " ", m.group(1))).strip()
+                t = re.sub(r"\s+", " ", t)
+                if t:
+                    return t
+        except Exception:
+            pass
+        try:
+            m = self._RX_H1.search(html_raw)
+            if m:
+                t = html.unescape(re.sub(r"<[^>]+>", " ", m.group(1))).strip()
+                if t:
+                    return t
+        except Exception:
+            pass
+        if meta.get("og_title"):
+            return meta["og_title"]
+        try:
+            p = urlparse(url)
+            path = p.path.strip("/")
+            if path:
+                last = path.split("/")[-1]
+                last = re.sub(r"\.(?:html?|php|aspx?|jsp)$", "", last, flags=re.IGNORECASE)
+                last = unquote(last).replace("_", " ").replace("-", " ").strip()
+                if len(last) >= 3:
+                    return last
+            return p.netloc
+        except Exception:
+            return ""
+
     def _extract(self, source, base_url):
         raw = source
         readable = self._readability_extract(raw)
@@ -1054,8 +1482,8 @@ class DontDoThat(Module):
             title = re.sub(r"<[^>]+>", " ", tm.group(1))
             title = html.unescape(title).strip()
         meta = self._extract_meta(raw)
-        if not title and meta.get("og_title"):
-            title = meta["og_title"]
+        if not title:
+            title = self._extract_title_fallback(raw, base_url, meta)
         text = re.sub(r"(?s)<[^>]+>", " ", source)
         text = html.unescape(text)
         text = re.sub(r"\s+", " ", text).strip()
@@ -1097,11 +1525,13 @@ class DontDoThat(Module):
             qs = urlparse(url).query
         except Exception:
             return None
-        for pair in qs.split("&"):
-            if "=" in pair:
-                key = pair.split("=", 1)[0]
-                if key in ("q", "query", "text", "search", "s", "keyword", "k", "wd", "word", "term", "find"):
-                    return key
+        preferred = ("q", "query", "text", "search", "s", "keyword", "k", "wd", "word", "term", "find")
+        for key in preferred:
+            for pair in qs.split("&"):
+                if "=" in pair:
+                    k = pair.split("=", 1)[0]
+                    if k == key:
+                        return key
         return None
 
     def _apply_site_override(self, name, site):
@@ -1122,7 +1552,8 @@ class DontDoThat(Module):
             return escaped_text
         if not escaped_text or not query:
             return escaped_text
-        words = [w for w in self._RX_WORD.findall(query) if len(w) > 1]
+        norm_query = self._normalize(query)
+        words = [w for w in self._RX_WORD.findall(norm_query) if len(w) > 1]
         if not words:
             return escaped_text
         pattern = r"(?<![\w])(?:" + "|".join(re.escape(html.escape(w)) for w in sorted(set(words), key=len, reverse=True)) + r")(?![\w])"
@@ -1135,11 +1566,11 @@ class DontDoThat(Module):
         if len(text) <= limit:
             return text
         cut = text[:limit]
-        for tag in ("<b>", "</b>", "<i>", "</i>", "<code>", "</code>", "<pre>", "</pre>", "<blockquote>", "</blockquote>"):
+        for tag in ("<b>", "</b>", "<i>", "</i>", "<code>", "</code>", "<pre>", "</pre>", "<blockquote>", "</blockquote>", "<u>", "</u>", "<s>", "</s>", "<tg-spoiler>", "</tg-spoiler>"):
             if cut.count(tag) % 2 != 0:
                 cut = cut.rsplit(tag, 1)[0]
         depth = 0
-        for m in re.finditer(r"</?(b|i|code|pre|blockquote)\b", cut):
+        for m in re.finditer(r"</?(?:b|i|code|pre|blockquote|u|s|tg-spoiler)\b", cut):
             if m.group(0).startswith("</"):
                 depth -= 1
             else:
@@ -1186,7 +1617,8 @@ class DontDoThat(Module):
             return 0.0
         text = self._lemmatize(result.get("snippet", ""))
         dl = len(text.split()) or 1
-        avgdl = max(1, sum(len(self._lemmatize(r.get("snippet", "")).split()) for r in all_results) / max(len(all_results), 1))
+        lens = [len(self._lemmatize(r.get("snippet", "")).split()) for r in all_results]
+        avgdl = max(1, sum(lens) / max(len(lens), 1))
         k1 = float(self.cfg.get("bm25_k1", 1.5) or 1.5)
         b = float(self.cfg.get("bm25_b", 0.75) or 0.75)
         N = max(1, len(all_results))
@@ -1197,7 +1629,7 @@ class DontDoThat(Module):
                 continue
             df = sum(1 for r in all_results if w in self._lemmatize(r.get("snippet", "")))
             idf = max(0.0, (N - df + 0.5) / (df + 0.5))
-            idf = math.log(idf + 1)
+            idf = math.log(idf + 1) if idf > 0 else 0.0
             score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / avgdl))
         priority_bonus = {"high": 0.3, "normal": 0.0, "low": -0.2}.get(site.get("priority", "normal"), 0.0)
         links_bonus = min(result.get("total_links", 0) / 100, 0.2)
@@ -1278,7 +1710,11 @@ class DontDoThat(Module):
             w = self._lemmatize(node[1])
             if not w:
                 return True
-            return w in self._lemmatize(text)
+            txt = self._lemmatize(text)
+            for part in w.split():
+                if part and part not in txt:
+                    return False
+            return True
         if op == "AND":
             return self._eval_bool_ast(node[1], text) and self._eval_bool_ast(node[2], text)
         if op == "OR":
@@ -1385,9 +1821,18 @@ class DontDoThat(Module):
             if ops["site"] and ops["site"].lower() not in r.get("url", "").lower():
                 continue
             if ops["filetype"]:
-                ext = "." + ops["filetype"].lower().lstrip(".")
-                if not any(ext in (f or "").lower() for f in r.get("files", [])):
-                    if ext not in (r.get("url") or "").lower():
+                exts = [e.strip().lstrip(".").lower() for e in ops["filetype"].split(",") if e.strip()]
+                if exts:
+                    hit = False
+                    for ext in exts:
+                        dot = "." + ext
+                        if any(dot in (f or "").lower() for f in r.get("files", [])):
+                            hit = True
+                            break
+                        if dot in (r.get("url") or "").lower():
+                            hit = True
+                            break
+                    if not hit:
                         continue
             if ops["intitle"]:
                 if ops["intitle"].lower() not in (r.get("title") or "").lower():
@@ -1410,9 +1855,13 @@ class DontDoThat(Module):
     def _dedup_difflib(self, results):
         thr = float(self.cfg.get("dedup_threshold", 0.85) or 0.85)
         out = []
-        for r in results:
+        for r in sorted(results, key=lambda x: -len(x.get("snippet") or "")):
             dup = False
+            r_len = len(r.get("snippet") or "")
             for o in out:
+                o_len = len(o.get("snippet") or "")
+                if o_len and abs(r_len - o_len) / max(r_len, o_len, 1) > 0.5:
+                    continue
                 ratio = difflib.SequenceMatcher(None, r.get("snippet", "")[:400], o.get("snippet", "")[:400]).ratio()
                 if ratio >= thr:
                     dup = True
@@ -1431,15 +1880,19 @@ class DontDoThat(Module):
                 found[name] = matches[:10]
         return found
 
-    def _cache_key(self, query, actor=None):
-        payload = query if actor is None else f"{actor}|{query}"
+    def _cache_key(self, query, actor=None, chat_id=None):
+        payload = query
+        if actor is not None:
+            payload = f"{actor}|{payload}"
+        if chat_id is not None:
+            payload = f"{chat_id}|{payload}"
         return hashlib.sha1(payload.encode("utf-8", errors="ignore")).hexdigest()
 
-    def _cache_get(self, query, actor=None):
+    def _cache_get(self, query, actor=None, chat_id=None):
         ttl = int(self.cfg.get("cache_ttl", 300) or 300)
         if ttl <= 0:
             return None
-        k = self._cache_key(query, actor)
+        k = self._cache_key(query, actor, chat_id)
         e = self._cache.get(k)
         if not e:
             return None
@@ -1448,22 +1901,29 @@ class DontDoThat(Module):
             return None
         return e["data"]
 
-    def _cache_set(self, query, data, actor=None):
+    def _cache_set(self, query, data, actor=None, chat_id=None):
         ttl = int(self.cfg.get("cache_ttl", 300) or 300)
         if ttl <= 0:
             return
-        self._cache[self._cache_key(query, actor)] = {"ts": time.time(), "data": data}
+        self._cache[self._cache_key(query, actor, chat_id)] = {"ts": time.time(), "data": data}
         if len(self._cache) > 1000:
-            items = sorted(self._cache.items(), key=lambda kv: kv[1]["ts"])
-            for k, _ in items[:500]:
-                self._cache.pop(k, None)
+            now = time.time()
+            self._cache = {k: v for k, v in self._cache.items() if now - v["ts"] < ttl * 2}
+            if len(self._cache) > 1000:
+                items = sorted(self._cache.items(), key=lambda kv: kv[1]["ts"])
+                for k, _ in items[: len(items) // 2]:
+                    self._cache.pop(k, None)
 
     def _run_hook_ignore_errors(self, hook_name, ctx):
         for fn in self._hooks.get(hook_name, []):
             try:
                 r = fn(ctx)
                 if asyncio.iscoroutine(r):
-                    asyncio.create_task(r)
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(r)
+                    except RuntimeError:
+                        pass
             except Exception:
                 continue
 
@@ -1541,10 +2001,33 @@ class DontDoThat(Module):
         flags = {}
         for m in self._RX_FLAG.finditer(tail):
             key = m.group(1)
-            val = m.group(2)
-            flags[key] = val if val is not None else True
+            val = m.group(2) or m.group(3) or m.group(4)
+            if val is None:
+                val = True
+            flags[key] = val
         cleaned = self._RX_FLAG.sub("", tail).strip()
         return cleaned, flags
+
+    def _unwrap_ddg(self, url):
+        if not url:
+            return url
+        m = self._RX_DDG_REDIRECT.match(url)
+        if not m:
+            m = self._RX_DDG_REDIRECT_INLINE.search(url)
+        if not m:
+            return url
+        try:
+            return unquote(m.group(1))
+        except Exception:
+            return url
+
+    def _unwrap_ddg_in_html(self, html_text):
+        if not html_text or "uddg=" not in html_text:
+            return html_text
+        try:
+            return self._RX_DDG_REDIRECT_INLINE.sub(lambda m: unquote(m.group(1)), html_text)
+        except Exception:
+            return html_text
 
     async def _log_search(self, event, query):
         if not self.cfg.get("log_searches", False):
@@ -1616,11 +2099,14 @@ class DontDoThat(Module):
             raise ValueError(f"plugin declares access {forbidden} but trust_level={trust_level}")
         hooks = meta.get("hooks") or []
         registered = []
+        missing = []
         for h in hooks:
             fn = getattr(module_obj, h, None)
             if callable(fn):
                 self._hooks.setdefault(h, []).append(fn)
                 registered.append(h)
+            else:
+                missing.append(h)
         self._plugins[reg_name] = {
             "name": meta.get("name", reg_name),
             "declared_name": meta.get("name", reg_name),
@@ -1632,6 +2118,7 @@ class DontDoThat(Module):
             "access": list(declared_access),
             "trust_level": trust_level,
             "hooks": registered,
+            "missing_hooks": missing,
             "module": module_obj,
             "enabled": True,
             "path": str(self._plugins_dir() / f"{reg_name}.py"),
@@ -1648,6 +2135,7 @@ class DontDoThat(Module):
         self._plugins.pop(name, None)
         if mn:
             sys.modules.pop(mn, None)
+        self._plugin_quota.pop(name, None)
         try:
             self._run_hook_ignore_errors("on_plugin_unload", {"name": name})
         except Exception:
@@ -1755,7 +2243,18 @@ class DontDoThat(Module):
             return False, f"download failed: {e}", {}
         try:
             import ast
-            ast.parse(data.decode("utf-8", errors="ignore"))
+            import tokenize
+            import io as _io
+            buf = _io.BytesIO(data)
+            try:
+                encoding, _ = tokenize.detect_encoding(buf.readline)
+            except Exception:
+                encoding = "utf-8"
+            try:
+                src = data.decode(encoding, errors="strict")
+            except Exception:
+                src = data.decode("utf-8", errors="ignore")
+            ast.parse(src)
         except SyntaxError as e:
             return False, f"syntax error: {e}", {}
         new_stem = Path(fname).stem
@@ -1903,17 +2402,31 @@ class DontDoThat(Module):
 
     async def _respond(self, event, text, **kwargs):
         try:
-            if getattr(event, "out", True):
-                return await event.edit(text, **kwargs)
+            if getattr(event, "out", None) is True:
+                try:
+                    return await event.edit(text, **kwargs)
+                except Exception as e:
+                    try:
+                        self.log.debug(f"[DontDoThat] _respond edit failed: {e}")
+                    except Exception:
+                        pass
         except Exception:
             pass
         try:
             return await event.respond(text, **kwargs)
-        except Exception:
+        except Exception as e:
             try:
-                return await event.reply(text, **kwargs)
+                self.log.debug(f"[DontDoThat] _respond respond failed: {e}")
             except Exception:
-                return None
+                pass
+        try:
+            return await event.reply(text, **kwargs)
+        except Exception as e:
+            try:
+                self.log.debug(f"[DontDoThat] _respond reply failed: {e}")
+            except Exception:
+                pass
+        return None
 
     async def _send_result(self, event, query, ok, err, page=0, original_message=None):
         if not ok:
@@ -1936,7 +2449,7 @@ class DontDoThat(Module):
             pass
 
     def _backup_path(self):
-        return Path("data/dontdothat_backup.json")
+        return Path(f"data/dontdothat_backup_{int(time.time())}.json")
 
     def _encrypt_data(self, raw: bytes) -> bytes:
         key = self.cfg.get("backup_encryption_key") or ""
@@ -1948,7 +2461,11 @@ class DontDoThat(Module):
             k = hashlib.sha256(key.encode()).digest()
             fkey = base64.urlsafe_b64encode(k)
             return Fernet(fkey).encrypt(raw)
-        except Exception:
+        except Exception as e:
+            try:
+                self.log.warning(f"[DontDoThat] backup encryption failed: {e}")
+            except Exception:
+                pass
             return raw
 
     def _decrypt_data(self, raw: bytes) -> bytes:
@@ -1961,7 +2478,11 @@ class DontDoThat(Module):
             k = hashlib.sha256(key.encode()).digest()
             fkey = base64.urlsafe_b64encode(k)
             return Fernet(fkey).decrypt(raw)
-        except Exception:
+        except Exception as e:
+            try:
+                self.log.warning(f"[DontDoThat] backup decryption failed: {e}")
+            except Exception:
+                pass
             return raw
 
     def _build_backup(self):
@@ -1973,6 +2494,7 @@ class DontDoThat(Module):
             "notes": self.cfg.get("notes", {}),
             "saved_results": self.cfg.get("saved_results", {}),
             "synonyms": self.cfg.get("synonyms", {}),
+            "templates": self.cfg.get("templates", {}),
             "watchers": self.cfg.get("watchers", []),
             "blocked_queries": self.cfg.get("blocked_queries", []),
             "blocked_users": self.cfg.get("blocked_users", []),
@@ -1980,9 +2502,9 @@ class DontDoThat(Module):
             "plugin_trust_overrides": self.cfg.get("plugin_trust_overrides", {}),
             "trusted_plugin_authors": self.cfg.get("trusted_plugin_authors", []),
             "privileged_plugin_authors": self.cfg.get("privileged_plugin_authors", []),
+            "plugins_metadata": self.cfg.get("plugins_metadata", {}),
             "stats": self._stats,
             "history": self._history[-200:],
-            "templates": self.cfg.get("templates", {}),
         }
 
     async def _watch_runner_once(self, wid=None):
@@ -1996,11 +2518,17 @@ class DontDoThat(Module):
                 continue
             q = w.get("query")
             if not q:
+                w["next_run"] = now + int(w.get("interval", 3600))
+                changed = True
                 continue
             try:
                 ok, err = await self._search_everywhere(q, actor="watcher")
             except Exception:
                 ok, err = [], []
+                w["next_run"] = now + max(60, int(w.get("interval", 3600)) * 2)
+            else:
+                w["next_run"] = now + int(w.get("interval", 3600))
+            changed = True
             seen = set(w.get("seen") or [])
             if w.get("new_only"):
                 new = [r for r in ok if r["url"] not in seen]
@@ -2009,8 +2537,6 @@ class DontDoThat(Module):
             for r in ok:
                 seen.add(r["url"])
             w["seen"] = list(seen)[-500:]
-            w["next_run"] = now + int(w.get("interval", 3600))
-            changed = True
             if new:
                 try:
                     cid = getattr(self.kernel, "log_chat_id", None)
@@ -2087,7 +2613,7 @@ class DontDoThat(Module):
             if r.get("meta"):
                 m = r["meta"]
                 meta_bits = []
-                for k in ("author", "date", "og_title"):
+                for k in ("author", "date", "og_title", "canonical"):
                     if m.get(k):
                         meta_bits.append(f"{k}={html.escape(str(m[k])[:80])}")
                 if meta_bits:
@@ -2149,9 +2675,10 @@ class DontDoThat(Module):
             f"<code>{p}dothat page &lt;n&gt; &lt;query&gt;</code> — page n\n"
             f"<code>{p}dothat openall</code> — send all urls\n"
             f"<code>{p}dothat json</code> — download json\n"
-            f"<code>{p}dothat save</code> — save last result\n"
+            f"<code>{p}dothat save [--tag=x]</code> — save last result\n"
+            f"<code>{p}dothat saved</code> — list saved\n"
             f"<code>{p}dothat retry</code> — repeat last\n"
-            f"<code>{p}dothat history</code> — recent queries\n"
+            f"<code>{p}dothat history [actor]</code> — recent queries\n"
             f"<code>{p}dothat find-in-history &lt;q&gt;</code> — fts search\n"
             f"<code>{p}dothat &lt;q&gt; --tag=x</code> — by tag\n"
             f"<code>{p}dothat &lt;q&gt; --to=&lt;chat_id&gt;</code> — to chat\n"
@@ -2183,38 +2710,38 @@ class DontDoThat(Module):
     def _help_diag(self, p):
         return (
             "<blockquote><b>🔬 diagnostics</b>\n"
-            f"<code>{p}dothat test &lt;url&gt; [--param=q]</code> — dry-run URL\n"
-            f"<code>{p}dothat ping</code> — quick ping all\n"
-            f"<code>{p}dothat heal</code> — update alive flags\n"
-            f"<code>{p}dothat doctor</code> — full report\n"
-            f"<code>{p}dothat dead</code> — dead sources\n"
-            f"<code>{p}dothat slow</code> — slowest sources\n"
-            f"<code>{p}dothat stat</code> — stats\n"
-            f"<code>{p}dothat latency</code> — p50/p95/p99\n"
-            f"<code>{p}dothat top</code> — top sources\n"
-            f"<code>{p}dothat dashboard</code> — overview\n"
-            f"<code>{p}dothat whoami</code> — your role\n"
-            f"<code>{p}dothat my-stats</code> — your activity\n"
-            f"<code>{p}dothat audit [n]</code> — audit log\n"
-            f"<code>{p}dothat audit-me</code> — your actions\n"
-            f"<code>{p}dothat logs [n]</code> — recent fetches\n"
+            f"<code>{p}dothat test &lt;url&gt; [--param=q] [--save]</code>\n"
+            f"<code>{p}dothat ping</code>\n"
+            f"<code>{p}dothat heal</code>\n"
+            f"<code>{p}dothat doctor</code>\n"
+            f"<code>{p}dothat dead</code>\n"
+            f"<code>{p}dothat slow</code>\n"
+            f"<code>{p}dothat slow-source</code>\n"
+            f"<code>{p}dothat stat</code>\n"
+            f"<code>{p}dothat latency</code>\n"
+            f"<code>{p}dothat top</code>\n"
+            f"<code>{p}dothat dashboard</code>\n"
+            f"<code>{p}dothat whoami</code>\n"
+            f"<code>{p}dothat my-stats</code>\n"
+            f"<code>{p}dothat audit [n]</code>\n"
+            f"<code>{p}dothat audit-me</code>\n"
+            f"<code>{p}dothat logs [n]</code>\n"
             f"<code>{p}dothat snapshot &lt;name&gt; &lt;query&gt;</code>\n"
             f"<code>{p}dothat diff &lt;name&gt; &lt;query&gt;</code>\n"
-            f"<code>{p}dothat note add &lt;url&gt; &lt;text&gt;</code> | <code>notes</code>\n"
+            f"<code>{p}dothat note add &lt;url&gt; &lt;text&gt;</code>\n"
+            f"<code>{p}dothat notes [search]</code>\n"
+            f"<code>{p}dothat note remove &lt;url&gt;</code>\n"
             "</blockquote>"
         )
 
     def _help_plugins(self, p):
         return (
             "<blockquote><b>🧩 plugins</b>\n"
-            f"<code>{p}dothat install [name]</code> — reply to .py or from repo\n"
-            f"<code>{p}dothat plugins</code> — installed list\n"
-            f"<code>{p}dothat plugin info &lt;name&gt;</code>\n"
-            f"<code>{p}dothat plugin reload &lt;name&gt;</code>\n"
-            f"<code>{p}dothat plugin enable|disable &lt;name&gt;</code>\n"
-            f"<code>{p}dothat plugin remove &lt;name&gt;</code>\n"
-            f"<code>{p}dothat plugin search &lt;query&gt;</code> — from repo\n"
-            f"<code>{p}dothat plugin install &lt;name&gt;</code> — from repo\n"
+            f"<code>{p}dothat install [name]</code>\n"
+            f"<code>{p}dothat plugins [--trust=trusted]</code>\n"
+            f"<code>{p}dothat plugin info|reload|enable|disable|remove &lt;name&gt;</code>\n"
+            f"<code>{p}dothat plugin search &lt;query&gt;</code>\n"
+            f"<code>{p}dothat plugin install &lt;name&gt; [--trust=privileged]</code>\n"
             f"<code>{p}dothat plugin update [&lt;name&gt;]</code>\n"
             f"<code>{p}dothat plugin upgrade-all</code>\n"
             f"<code>{p}dothat plugin refresh-index</code>\n"
@@ -2226,8 +2753,8 @@ class DontDoThat(Module):
     def _help_trust(self, p):
         return (
             "<blockquote><b>🔐 plugin trust</b>\n"
-            "<b>sandboxed</b> — только ctx, нет доступа к модулю\n"
-            "<b>trusted</b> — ctx + module (объект DontDoThat)\n"
+            "<b>sandboxed</b> — только ctx\n"
+            "<b>trusted</b> — ctx + module\n"
             "<b>privileged</b> — ctx + module + kernel + cfg\n"
             f"<code>{p}dothat cfg trusted_plugin_authors [\"@author\"]</code>\n"
             f"<code>{p}dothat cfg privileged_plugin_authors [\"@author\"]</code>\n"
@@ -2239,29 +2766,29 @@ class DontDoThat(Module):
     def _help_roles(self, p):
         return (
             "<blockquote><b>🛡 roles</b>\n"
-            f"<code>{p}dothat help roles list</code> — who has what\n"
-            f"<code>{p}dothat help roles manage</code> — assign roles\n"
-            f"<code>{p}dothat help roles perms</code> — role permissions\n"
-            f"<code>{p}dothat help roles trust</code> — trust flow\n"
-            f"<code>{p}dothat help roles quotas</code> — daily quotas\n"
-            f"<code>{p}dothat help roles mute</code> — mute/unmute\n"
+            f"<code>{p}dothat help roles list</code>\n"
+            f"<code>{p}dothat help roles manage</code>\n"
+            f"<code>{p}dothat help roles perms</code>\n"
+            f"<code>{p}dothat help roles trust</code>\n"
+            f"<code>{p}dothat help roles quotas</code>\n"
+            f"<code>{p}dothat help roles mute</code>\n"
             "</blockquote>"
         )
 
     def _help_roles_list(self, p):
         return (
             "<blockquote><b>roles · list</b>\n"
-            f"<code>{p}dothat trusted</code> — all trusted users\n"
-            f"<code>{p}dothat roles</code> — matrix by role\n"
-            f"<code>{p}dothat roleinfo &lt;uid|@u|reply&gt;</code> — user's role\n"
+            f"<code>{p}dothat trusted</code>\n"
+            f"<code>{p}dothat roles</code>\n"
+            f"<code>{p}dothat roleinfo &lt;uid|@u|reply&gt;</code>\n"
             "</blockquote>"
         )
 
     def _help_roles_manage(self, p):
         return (
             "<blockquote><b>roles · manage</b>\n"
-            f"<code>{p}dothat trust</code> — reply, mark trusted\n"
-            f"<code>{p}dothat untrust</code> — reply, remove all\n"
+            f"<code>{p}dothat trust</code>\n"
+            f"<code>{p}dothat untrust</code>\n"
             f"<code>{p}dothat role set &lt;uid|@u|reply&gt; &lt;role&gt;</code>\n"
             f"<code>{p}dothat role remove &lt;uid|@u|reply&gt;</code>\n"
             f"<code>{p}dothat role up &lt;uid|@u|reply&gt;</code>\n"
@@ -2274,12 +2801,12 @@ class DontDoThat(Module):
         return (
             "<blockquote><b>roles · permissions</b>\n"
             "<b>guest</b> — whoami, help\n"
-            "<b>viewer</b> — + sites, tags, info, stat, top, dashboard, my-stats\n"
+            "<b>viewer</b> — + sites, tags, info, stat, top, dashboard, my-stats, latency\n"
             "<b>contributor</b> — + add-contrib, pending\n"
-            "<b>verified/searcher</b> — + search, multi, trace, raw, retry, history, profile, page, openall, json, save\n"
-            "<b>editor</b> — + add, remove, enable, disable, rename, clone, tag, priority, ping, heal, doctor, dead, slow, watch, note, snapshot, diff, export\n"
-            "<b>admin</b> — + logs, metrics, audit, mute\n"
-            "<b>superadmin</b> — + plugins, plugin reload/enable/disable, cfg get, import, impersonate\n"
+            "<b>verified/searcher</b> — + search, multi, trace, raw, retry, history, profile, page, openall, json, save, saved\n"
+            "<b>editor</b> — + add, remove, enable, disable, rename, clone, tag, priority, weight, ping, heal, doctor, dead, slow, watch, note, snapshot, diff, export\n"
+            "<b>admin</b> — + logs, metrics, audit, mute, unmute\n"
+            "<b>superadmin</b> — + plugins, plugin reload/enable/disable, cfg get, import\n"
             "<b>owner</b> — everything\n"
             "</blockquote>"
         )
@@ -2287,9 +2814,9 @@ class DontDoThat(Module):
     def _help_roles_trust(self, p):
         return (
             "<blockquote><b>roles · trust</b>\n"
-            f"<code>{p}dothat trust</code> — reply to user, adds to trusted (role searcher)\n"
-            f"<code>{p}dothat untrust</code> — reply, removes all roles\n"
-            f"<code>{p}dothat role set reply &lt;role&gt;</code> — after trust, assign specific role\n"
+            f"<code>{p}dothat trust</code>\n"
+            f"<code>{p}dothat untrust</code>\n"
+            f"<code>{p}dothat role set reply &lt;role&gt;</code>\n"
             "</blockquote>"
         )
 
@@ -2297,7 +2824,7 @@ class DontDoThat(Module):
         return (
             "<blockquote><b>roles · quotas</b>\n"
             f"<code>{p}dothat cfg trusted_quotas {{\"123\":{{\"daily_searches\":50,\"daily_adds\":5}}}}</code>\n"
-            f"<code>{p}dothat cfg quota_used</code> — current usage\n"
+            f"<code>{p}dothat cfg quota_used</code>\n"
             "</blockquote>"
         )
 
@@ -2313,15 +2840,15 @@ class DontDoThat(Module):
     def _help_service(self, p):
         return (
             "<blockquote><b>⚙ service</b>\n"
-            f"<code>{p}dothat cfg &lt;key&gt; [value]</code> — get/set config\n"
+            f"<code>{p}dothat cfg &lt;key&gt; [value]</code>\n"
+            f"<code>{p}dothat cfg &lt;key&gt; --reset</code>\n"
             f"<code>{p}dothat export [--format=json|jsonl|csv|md|html|misp]</code>\n"
-            f"<code>{p}dothat import</code> — reply to json\n"
-            f"<code>{p}dothat backup</code> — full state backup\n"
-            f"<code>{p}dothat restore</code> — reply to backup file\n"
-            f"<code>{p}dothat watch add &lt;q&gt; every &lt;1h&gt; [--new-only] [--changed]</code>\n"
-            f"<code>{p}dothat watch list</code> | <code>{p}dothat watch remove &lt;id&gt;</code> | <code>{p}dothat watch run &lt;id&gt;</code>\n"
-            f"<code>{p}dothat metrics export [--since=7d]</code>\n"
-            f"<code>{p}dothat template add &lt;name&gt; &lt;query&gt;</code> | <code>template list</code> | <code>template run &lt;name&gt;</code>\n"
+            f"<code>{p}dothat import</code>\n"
+            f"<code>{p}dothat backup</code>\n"
+            f"<code>{p}dothat restore</code>\n"
+            f"<code>{p}dothat watch add|list|remove|run</code>\n"
+            f"<code>{p}dothat metrics export [--since=7d] [--format=csv|json]</code>\n"
+            f"<code>{p}dothat template add|list|run|remove</code>\n"
             f"<code>{p}dothat version</code>\n"
             "</blockquote>"
         )
@@ -2329,16 +2856,13 @@ class DontDoThat(Module):
     def _help_operators(self, p):
         return (
             "<blockquote><b>⚡ operators</b>\n"
-            "<code>+word</code> — must include\n"
-            "<code>-word</code> — exclude\n"
-            '<code>"phrase"</code> — exact phrase\n'
-            "<code>site:example.com</code> — only this domain\n"
-            "<code>filetype:pdf</code> — only this filetype\n"
-            "<code>intitle:word</code> — only in title\n"
-            "<code>кот*</code> — wildcard\n"
-            "<code>~котик</code> — fuzzy match\n"
-            "<code>(котик OR кот) AND NOT собака</code> — boolean\n"
-            "synonyms: <code>.dothat cfg synonyms {\"car\":[\"auto\",\"vehicle\"]}</code>\n"
+            "<code>+word</code>\n<code>-word</code>\n"
+            '<code>"phrase"</code>\n'
+            "<code>site:example.com</code>\n"
+            "<code>filetype:pdf,docx</code>\n"
+            "<code>intitle:word</code>\n"
+            "<code>кот*</code>\n<code>~котик</code>\n"
+            "<code>(котик OR кот) AND NOT собака</code>\n"
             "</blockquote>"
         )
 
@@ -2380,7 +2904,7 @@ class DontDoThat(Module):
     def _sites_text(self, page=0):
         sites = self._sites()
         names = sorted(sites.keys())
-        per = int(self.cfg.get("sites_per_page", 5) or 5)
+        per = max(1, int(self.cfg.get("sites_per_page", 5) or 5))
         total = max(1, (len(names) + per - 1) // per)
         page = max(0, min(page, total - 1))
         chunk = names[page * per:(page + 1) * per]
@@ -2398,8 +2922,9 @@ class DontDoThat(Module):
             typ = " [api]" if d.get("type") == "api" else ""
             prio = d.get("priority") or "normal"
             tags = ",".join(d.get("tags") or []) or "-"
+            weight = d.get("weight", 1.0)
             out.append(f"{mark} <b>{html.escape(n)}</b>{dis}{typ} — <code>{html.escape(d.get('host', '?'))}</code>")
-            out.append(f"   prio=<code>{html.escape(prio)}</code> tags=<code>{html.escape(tags)}</code>")
+            out.append(f"   prio=<code>{html.escape(prio)}</code> tags=<code>{html.escape(tags)}</code> w=<code>{weight}</code>")
         if total > 1:
             out.append("")
             nav = []
@@ -2417,7 +2942,7 @@ class DontDoThat(Module):
         for k in ("superadmins", "admins", "editors", "verified", "contributors", "searchers", "viewers", "guests", "trusted"):
             for uid in r.get(k) or []:
                 all_ids.append((uid, k))
-        per = int(self.cfg.get("trusted_per_page", 5) or 5)
+        per = max(1, int(self.cfg.get("trusted_per_page", 5) or 5))
         total = max(1, (len(all_ids) + per - 1) // per)
         page = max(0, min(page, total - 1))
         chunk = all_ids[page * per:(page + 1) * per]
@@ -2521,6 +3046,11 @@ class DontDoThat(Module):
                         return {"__error__": name, "error": f"captcha ({info})"}
             else:
                 return {"__error__": name, "error": "captcha"}
+        if self._is_cloudflare(page) or self._is_captcha(page):
+            self._sqlite_log_fetch(name, url, status, elapsed, len(page), True, "still-blocked")
+            self._stats["per_source_fail"][name] = self._stats["per_source_fail"].get(name, 0) + 1
+            return {"__error__": name, "error": "still blocked after bypass"}
+        page = self._unwrap_ddg_in_html(page)
         title, text, links, files, images, meta = self._extract(page, url)
         if self._looks_js_required(text, page):
             hr = await self._run_hook("on_js_required", {**ctx, "html": page})
@@ -2536,8 +3066,7 @@ class DontDoThat(Module):
                     if jtx and len(jtx) > len(text):
                         title, text, links, files, images, meta = jt or title, jtx, jl or links, jf or files, ji or images, jm or meta
         if not self._is_cloudflare(page) and not self._is_captcha(page):
-            if name in self._stats["per_source_fail"]:
-                self._stats["per_source_fail"][name] = 0
+            self._stats["per_source_fail"][name] = 0
         norm_text = self._lemmatize(text)
         words = [w for w in self._lemmatize(query).split() if len(w) > 1]
         matches = sum(1 for w in words if w in norm_text)
@@ -2547,19 +3076,23 @@ class DontDoThat(Module):
             matching_links = links[:8]
         snippet_len = int(self.cfg.get("max_snippet", 1200) or 1200)
         snippet = self._context_snippet(text[:snippet_len * 2], query)[:snippet_len]
+        if self.cfg.get("pii_filter_in_snippet", False):
+            snippet = self._clean(snippet)
         snippet_esc = html.escape(snippet)
         snippet_hl = self._highlight(snippet_esc, query)
         self._sqlite_log_fetch(name, url, status, elapsed, len(page), False, bypass_info or fallback_used or "ok")
         lat = self._stats["latency"].setdefault(name, [])
         lat.append(elapsed)
-        if len(lat) > 200:
+        if len(lat) > int(self.cfg.get("latency_max_entries", 200) or 200):
             self._stats["latency"][name] = lat[-100:]
         if deep and self.cfg.get("snapshots_enabled", True):
             self._sqlite_save_snapshot(name, query, url, page)
         result = {
             "name": name, "url": url, "title": title or "untitled page",
             "snippet": snippet, "snippet_esc": snippet_esc, "snippet_hl": snippet_hl,
-            "links": matching_links[:8], "files": files, "images": images,
+            "links": [self._unwrap_ddg(l) for l in matching_links[:8]],
+            "files": [self._unwrap_ddg(f) for f in files],
+            "images": images,
             "matches": matches, "total_links": len(links),
             "status": status, "elapsed": elapsed,
             "bypass": bypass_info, "fallback": fallback_used,
@@ -2629,12 +3162,13 @@ class DontDoThat(Module):
             "snippet": snippet, "snippet_esc": snippet_esc, "snippet_hl": self._highlight(snippet_esc, query),
             "links": [it["url"] for it in items[:8]], "files": [], "images": [],
             "matches": matches, "total_links": len(items),
-            "status": status, "elapsed": 0.0, "bypass": "api",
+            "status": status or 0, "elapsed": 0.0, "bypass": "api",
             "tags": site.get("tags") or [], "priority": site.get("priority") or "normal",
             "entities": {},
         }
 
-    async def _search_everywhere(self, query, tag=None, mode="normal", actor=None):
+    async def _search_everywhere(self, query, tag=None, mode="normal", actor=None, chat_id=None):
+        started_at = time.time()
         pre = await self._run_hook("on_search", {"query": query, "tag": tag, "mode": mode, "actor": actor})
         if isinstance(pre, tuple) and len(pre) == 2:
             return pre
@@ -2655,6 +3189,7 @@ class DontDoThat(Module):
             fast = {n: s for n, s in sites.items() if s.get("priority") == "high"}
             if fast:
                 sites = fast
+        high_results = None
         if mode != "all" and self.cfg.get("priority_first", True) and mode != "fast":
             high = {n: s for n, s in sites.items() if s.get("priority") == "high"}
             if high:
@@ -2663,8 +3198,12 @@ class DontDoThat(Module):
                 okh = [r for r in hr if isinstance(r, dict) and "__error__" not in r and "__skipped__" not in r]
                 if okh and len(okh) >= max(1, len(high) // 2):
                     sites = high
-        tasks = [self._search_site(n, s, syn_query or query, deep=deep) for n, s in sites.items()]
-        raw = await asyncio.gather(*tasks, return_exceptions=True)
+                    high_results = hr
+        if high_results is not None:
+            raw = high_results
+        else:
+            tasks = [self._search_site(n, s, syn_query or query, deep=deep) for n, s in sites.items()]
+            raw = await asyncio.gather(*tasks, return_exceptions=True)
         ok = []
         err = []
         seen_links = set()
@@ -2699,6 +3238,12 @@ class DontDoThat(Module):
         if actor is not None:
             pu = self._stats["per_user"]
             pu[str(actor)] = pu.get(str(actor), 0) + 1
+        elapsed_total = time.time() - started_at
+        if elapsed_total > float(self.cfg.get("slow_query_threshold", 5.0) or 5.0):
+            self._stats["slow_queries"].append({"ts": time.time(), "query": query, "elapsed": round(elapsed_total, 2), "hits": len(ok)})
+            if len(self._stats["slow_queries"]) > 100:
+                self._stats["slow_queries"] = self._stats["slow_queries"][-100:]
+            self._sqlite_log_slow(actor, query, elapsed_total, len(ok))
         self._last_result = {"query": query, "ok": ok, "err": err, "ts": time.time(), "actor": str(actor) if actor else "?"}
         self._history.append({"query": query, "ts": time.time(), "hits": len(ok), "errors": len(err), "actor": str(actor) if actor else "?"})
         if len(self._history) > int(self.cfg.get("history_size", 50) or 50):
@@ -2707,28 +3252,37 @@ class DontDoThat(Module):
         self._sqlite_log_query(actor, query, len(ok), len(err))
         if actor is not None:
             self._user_activity.setdefault(str(actor), []).append({"ts": time.time(), "type": "search", "query": query})
+            limit = int(self.cfg.get("user_activity_max", 500) or 500)
+            if len(self._user_activity) > limit:
+                items = sorted(self._user_activity.items(), key=lambda kv: -(max((a["ts"] for a in kv[1]), default=0)))
+                self._user_activity = dict(items[: limit // 2])
         if self.cfg.get("webhook_url"):
             asyncio.create_task(self._fire_webhook(query, ok, err))
         return ok, err
 
     async def _fire_webhook(self, query, ok, err):
-        try:
-            payload = json.dumps({"query": query, "hits": len(ok), "errors": len(err), "urls": [r["url"] for r in ok[:20]]}, ensure_ascii=False)
-            url = self.cfg.get("webhook_url")
-            if not url:
-                return
-            if not self._is_ssrf_safe(url):
-                return
-            headers = {"Content-Type": "application/json"}
-            secret = self.cfg.get("webhook_secret") or ""
-            if secret:
-                import hmac
-                sig = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
-                headers["X-DDT-Signature"] = f"sha256={sig}"
-            req = Request(url, data=payload.encode("utf-8"), headers=headers, method="POST")
-            await asyncio.to_thread(lambda: urlopen(req, timeout=10).read())
-        except Exception:
-            pass
+        url = self.cfg.get("webhook_url")
+        if not url:
+            return
+        if not self._is_ssrf_safe(url):
+            return
+        payload = json.dumps({"query": query, "hits": len(ok), "errors": len(err), "urls": [r["url"] for r in ok[:20]]}, ensure_ascii=False)
+        headers = {"Content-Type": "application/json"}
+        secret = self.cfg.get("webhook_secret") or ""
+        if secret:
+            sig = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+            headers["X-DDT-Signature"] = f"sha256={sig}"
+        retries = int(self.cfg.get("webhook_retries", 3) or 3)
+        for attempt in range(retries):
+            try:
+                req = Request(url, data=payload.encode("utf-8"), headers=headers, method="POST")
+                resp = await asyncio.to_thread(lambda: urlopen(req, timeout=10))
+                code = getattr(resp, "status", 200)
+                if 200 <= code < 300:
+                    return
+            except Exception:
+                pass
+            await asyncio.sleep(2 ** attempt)
 
     @watcher
     async def trusted_watcher(self, event):
@@ -2852,26 +3406,49 @@ class DontDoThat(Module):
         if thr <= 0:
             return
         now = time.time()
+        owner_id = None
+        try:
+            owner_id = str(self.kernel.context.admin_id)
+        except Exception:
+            pass
         for uid, acts in list(self._user_activity.items()):
+            if uid == owner_id:
+                continue
             recent = [a for a in acts if now - a["ts"] < win]
             self._user_activity[uid] = recent
             if len(recent) >= thr:
                 try:
                     r = self.cfg.get("roles", {}) or {}
+                    demoted = None
                     if int(uid) in (r.get("editors") or []):
                         self._set_role(int(uid), "verified")
+                        demoted = "verified"
                     elif int(uid) in (r.get("verified") or []):
                         self._set_role(int(uid), "contributor")
+                        demoted = "contributor"
                     elif int(uid) in (r.get("contributors") or []):
                         self._set_role(int(uid), "viewer")
-                    owner_id = getattr(self.kernel.context, "admin_id", None)
-                    if owner_id:
+                        demoted = "viewer"
+                    if demoted and owner_id:
                         try:
-                            await self.kernel.client.send_message(owner_id, f"⚠️ auto-demote <code>{uid}</code>: {len(recent)} actions in {win}s", parse_mode="html")
+                            await self.kernel.client.send_message(int(owner_id), f"⚠️ auto-demote <code>{uid}</code>: {len(recent)} actions in {win}s → <code>{demoted}</code>", parse_mode="html")
                         except Exception:
                             pass
                 except Exception:
                     pass
+
+    @loop(interval=600)
+    async def cleanup_pending_actions(self):
+        ttl = int(self.cfg.get("pending_actions_ttl", 86400) or 86400)
+        if ttl <= 0:
+            return
+        pending = self.cfg.get("pending_actions", {}) or {}
+        if not pending:
+            return
+        now = time.time()
+        new = {k: v for k, v in pending.items() if now - v.get("ts", 0) < ttl}
+        if len(new) != len(pending):
+            self.cfg.set("pending_actions", new)
 
     @loop(interval=60)
     async def watch_runner(self):
@@ -2887,6 +3464,11 @@ class DontDoThat(Module):
         args = self._args(event)
         p = self._prefix()
         sender = self._sender_id(event)
+        chat_id = None
+        try:
+            chat_id = event.chat_id
+        except Exception:
+            pass
 
         if not args:
             reply = None
@@ -2896,14 +3478,19 @@ class DontDoThat(Module):
                 reply = None
             if reply is not None:
                 try:
-                    s = await reply.get_sender()
+                    is_bot_msg = getattr(reply, "out", False) or bool(getattr(reply, "via_bot_id", None))
                 except Exception:
-                    s = None
-                un = getattr(s, "username", None) if s else None
-                if un:
-                    args = f"@{un}"
-                else:
-                    await self._respond(event, "<blockquote><b>this user has no username.</b></blockquote>", parse_mode="html")
+                    is_bot_msg = False
+                if not is_bot_msg:
+                    try:
+                        s = await reply.get_sender()
+                    except Exception:
+                        s = None
+                    un = getattr(s, "username", None) if s else None
+                    if un:
+                        args = f"@{un}"
+                if not args:
+                    await self._respond(event, self._usage(), parse_mode="html")
                     return
             else:
                 await self._respond(event, self._usage(), parse_mode="html")
@@ -2962,12 +3549,24 @@ class DontDoThat(Module):
             elif section == "operators":
                 text = self._help_operators(p)
             else:
-                text = self._help_main(p)
+                all_known = ["search", "sources", "diag", "plugins", "trust", "roles", "service", "operators", "commands"]
+                close = difflib.get_close_matches(section, all_known, n=1) if section else []
+                if close:
+                    text = f"<blockquote><b>unknown section</b> <code>{html.escape(section)}</code>\n<i>did you mean:</i> <code>{p}dothat help {html.escape(close[0])}</code></blockquote>"
+                else:
+                    text = self._help_main(p)
             await self._respond(event, text, parse_mode="html")
             return
 
         if action == "version":
-            await self._respond(event, f"<blockquote><b>DontDoThat</b> v<code>{self.version}</code>\n<i>{html.escape(self.description)}</i>\n<b>plugins:</b> <code>{len(self._plugins)}</code>\n<b>sites:</b> <code>{len(self._sites())}</code></blockquote>", parse_mode="html")
+            deps = []
+            for name, mod in (("curl_cffi", _HAS_CURL), ("httpx", _HAS_HTTPX), ("pymorphy2", _MORPH is not None)):
+                deps.append(f"{name}={'✓' if mod else '✗'}")
+            trust_counts = {"sandboxed": 0, "trusted": 0, "privileged": 0}
+            for v in self._plugins.values():
+                t = v.get("trust_level", "sandboxed")
+                trust_counts[t] = trust_counts.get(t, 0) + 1
+            await self._respond(event, f"<blockquote><b>DontDoThat</b> v<code>{self.version}</code>\n<i>{html.escape(self.description)}</i>\n<b>plugins:</b> <code>{len(self._plugins)}</code> (🔒{trust_counts.get('sandboxed', 0)} 🔓{trust_counts.get('trusted', 0)} 👑{trust_counts.get('privileged', 0)})\n<b>sites:</b> <code>{len(self._sites())}</code>\n<b>deps:</b> <code>{' '.join(deps)}</code></blockquote>", parse_mode="html")
             return
 
         if action == "whoami":
@@ -3202,6 +3801,7 @@ class DontDoThat(Module):
             n, u = int(m.group(1)), m.group(2)
             secs = n * {"s": 1, "m": 60, "h": 3600, "d": 86400}[u]
             self._mute_user(uid, secs)
+            self._audit_log(sender, "mute", f"{uid} {dur}")
             await self._respond(event, f"<blockquote><b>muted:</b> <code>{uid}</code> {dur}</blockquote>", parse_mode="html")
             return
 
@@ -3247,7 +3847,7 @@ class DontDoThat(Module):
                 return
             ok_limit, reason = self._check_quota(sender, "add")
             if not ok_limit:
-                await self._respond(event, f"<blockquote><b>{html.escape(reason)}</b></blockquote>", parse_mode="html")
+                await self._respond(event, f"<blockquote><b>{html.escape(reason or 'quota exceeded')}</b></blockquote>", parse_mode="html")
                 return
             pending = self.cfg.get("pending_sources", {}) or {}
             nid = str(int(self.cfg.get("pending_next_id", 1) or 1))
@@ -3394,9 +3994,9 @@ class DontDoThat(Module):
                 await self._respond(event, "<blockquote><b>bad page number</b></blockquote>", parse_mode="html")
                 return
             q = parts[2].strip()
-            cached = self._cache_get(q + "||normal", actor=sender)
+            cached = self._cache_get(q + "||normal", actor=sender, chat_id=chat_id)
             if cached is None:
-                ok, err = await self._search_everywhere(q, actor=sender)
+                ok, err = await self._search_everywhere(q, actor=sender, chat_id=chat_id)
             else:
                 ok, err = cached, []
             if not ok:
@@ -3445,11 +4045,29 @@ class DontDoThat(Module):
             e = self._last_result or {}
             ok = e.get("ok") or []
             q = e.get("query") or ""
+            tag = None
+            sm = re.search(r"--tag=(\w+)", args)
+            if sm:
+                tag = sm.group(1)
             saved = self.cfg.get("saved_results", {}) or {}
             sid = hashlib.sha1((q + str(time.time())).encode()).hexdigest()[:10]
-            saved[sid] = {"query": q, "ts": time.time(), "hits": len(ok), "results": [{k: v for k, v in r.items() if k not in ("snippet_hl", "snippet_esc")} for r in ok[:50]]}
+            saved[sid] = {"query": q, "ts": time.time(), "hits": len(ok), "tag": tag, "results": [{k: v for k, v in r.items() if k not in ("snippet_hl", "snippet_esc")} for r in ok[:50]]}
             self.cfg.set("saved_results", saved)
-            await self._respond(event, f"<blockquote><b>saved as</b> <code>{sid}</code></blockquote>", parse_mode="html")
+            await self._respond(event, f"<blockquote><b>saved as</b> <code>{sid}</code>{' (tag=' + html.escape(tag) + ')' if tag else ''}</blockquote>", parse_mode="html")
+            return
+
+        if action == "saved":
+            saved = self.cfg.get("saved_results", {}) or {}
+            if not saved:
+                await self._respond(event, "<blockquote><b>no saved results.</b></blockquote>", parse_mode="html")
+                return
+            out = ["<blockquote><b>saved</b></blockquote>"]
+            for sid, data in list(saved.items())[-20:]:
+                t = time.strftime("%Y-%m-%d %H:%M", time.localtime(data.get("ts", 0)))
+                tag = data.get("tag")
+                tag_str = f" <i>[{html.escape(tag)}]</i>" if tag else ""
+                out.append(f"<code>{sid}</code> — <code>{html.escape(data.get('query', ''))}</code> ({data.get('hits', 0)} hits){tag_str} — {t}")
+            await self._respond(event, "\n".join(out), parse_mode="html")
             return
 
         if action == "find-in-history":
@@ -3462,7 +4080,8 @@ class DontDoThat(Module):
                 await self._respond(event, "<blockquote><b>sqlite disabled.</b></blockquote>", parse_mode="html")
                 return
             try:
-                rows = c.execute("SELECT ts, query, hits FROM queries WHERE query LIKE ? ORDER BY ts DESC LIMIT 20", (f"%{q}%",)).fetchall()
+                with self._sqlite_lock:
+                    rows = c.execute("SELECT ts, query, hits FROM queries WHERE query LIKE ? ORDER BY ts DESC LIMIT 20", (f"%{q}%",)).fetchall()
             except Exception:
                 rows = []
             if not rows:
@@ -3554,16 +4173,18 @@ class DontDoThat(Module):
                 raw = await reply.download_media(bytes)
                 raw = self._decrypt_data(raw)
                 data = json.loads(raw.decode("utf-8"))
+                if not isinstance(data, dict):
+                    raise ValueError("backup must be object")
             except Exception as e:
                 await self._respond(event, f"<blockquote><b>restore failed:</b> <code>{html.escape(str(e))}</code></blockquote>", parse_mode="html")
                 return
             if isinstance(data.get("sites"), dict):
                 self._save_sites(data["sites"])
-            for key in ("roles", "notes", "saved_results", "synonyms", "watchers", "blocked_queries", "blocked_users", "allowed_chats", "plugin_trust_overrides", "trusted_plugin_authors", "privileged_plugin_authors", "templates"):
+            for key in ("roles", "notes", "saved_results", "synonyms", "watchers", "blocked_queries", "blocked_users", "allowed_chats", "plugin_trust_overrides", "trusted_plugin_authors", "privileged_plugin_authors", "templates", "plugins_metadata"):
                 if key in data:
                     self.cfg.set(key, data[key])
             if isinstance(data.get("stats"), dict):
-                self._stats = data["stats"]
+                self._stats.update(data["stats"])
             if isinstance(data.get("history"), list):
                 self._history = data["history"][-int(self.cfg.get("history_size", 50) or 50):]
             self._save_persistent_state()
@@ -3598,19 +4219,21 @@ class DontDoThat(Module):
                 return
             await self._log_search(event, query)
             self._audit_log(sender, "search", query)
-            ok_limit, reason = self._check_quota(sender, "search")
+            ok_limit, key = self._check_quota_pre(sender, "search")
             if not ok_limit:
-                await self._respond(event, f"<blockquote><b>{html.escape(reason)}</b></blockquote>", parse_mode="html")
+                await self._respond(event, "<blockquote><b>quota exceeded</b></blockquote>", parse_mode="html")
                 return
             await self._respond(event, "<blockquote><b>doing that..</b></blockquote>", parse_mode="html")
-            ok, err = await self._search_everywhere(query, tag=tag_filter, actor=sender)
+            ok, err = await self._search_everywhere(query, tag=tag_filter, actor=sender, chat_id=chat_id)
+            if ok or err:
+                self._check_quota_commit(sender, key)
             await self._send_result(event, query, ok, err)
             return
 
         admin_actions = {
             "add", "add-api", "remove", "sites", "info", "heal", "doctor", "stat", "import", "export",
             "enable", "disable", "rename", "clone", "clear", "tag", "priority", "tags", "weight",
-            "ping", "dead", "slow", "audit", "cfg", "install", "plugins", "plugin", "logs",
+            "ping", "dead", "slow", "slow-source", "audit", "cfg", "install", "plugins", "plugin", "logs",
             "watch", "note", "notes", "snapshot", "diff", "dashboard", "metrics", "latency", "trust-list",
         }
         read_actions = {"sites", "stat", "tags", "info", "top", "dashboard", "latency", "trust-list"}
@@ -3666,22 +4289,34 @@ class DontDoThat(Module):
                 author = info.get("author") or "?"
                 trust = info.get("trust_level", "sandboxed")
                 hooks = ",".join(info.get("hooks") or []) or "-"
-                await self._respond(event, f"<blockquote><b>Plugin {html.escape(declared)} installed!</b>\n<b>Version:</b> <code>{html.escape(version)}</code>\n<b>Author:</b> <code>{html.escape(author)}</code>\n<b>Trust:</b> <code>{html.escape(trust)}</code>\n<b>Hooks:</b> <code>{html.escape(hooks)}</code>\n<b>Key:</b> <code>{html.escape(reg_name)}</code></blockquote>", parse_mode="html")
+                missing = info.get("missing_hooks") or []
+                miss_str = f"\n<b>missing hooks:</b> <code>{html.escape(','.join(missing))}</code>" if missing else ""
+                await self._respond(event, f"<blockquote><b>Plugin {html.escape(declared)} installed!</b>\n<b>Version:</b> <code>{html.escape(version)}</code>\n<b>Author:</b> <code>{html.escape(author)}</code>\n<b>Trust:</b> <code>{html.escape(trust)}</code>\n<b>Hooks:</b> <code>{html.escape(hooks)}</code>{miss_str}\n<b>Key:</b> <code>{html.escape(reg_name)}</code></blockquote>", parse_mode="html")
             else:
                 await self._respond(event, f"<blockquote><b>install failed:</b> <code>{html.escape(str(reg_name))}</code></blockquote>", parse_mode="html")
             return
 
         if action == "plugins":
+            trust_filter = None
+            tm2 = re.search(r"--trust=(\w+)", args)
+            if tm2:
+                trust_filter = tm2.group(1).lower()
             if not self._plugins:
                 await self._respond(event, "<blockquote><b>no plugins installed.</b></blockquote>", parse_mode="html")
                 return
             out = ["<blockquote><b>plugins</b></blockquote>"]
+            shown = 0
             for k, v in self._plugins.items():
-                st = "🟢" if v.get("enabled") else "🔴"
                 trust = v.get("trust_level", "sandboxed")
+                if trust_filter and trust != trust_filter:
+                    continue
+                shown += 1
+                st = "🟢" if v.get("enabled") else "🔴"
                 emoji = {"sandboxed": "🔒", "trusted": "🔓", "privileged": "👑"}.get(trust, "?")
                 dn = v.get("declared_name") or v.get("name") or k
                 out.append(f"{st}{emoji} <b>{html.escape(dn)}</b> v{html.escape(v.get('version', '?'))} — <code>{html.escape(k)}</code> — <i>{trust}</i>")
+            if shown == 0:
+                out.append("<i>no plugins matching filter.</i>")
             await self._respond(event, "\n".join(out), parse_mode="html")
             return
 
@@ -3706,6 +4341,7 @@ class DontDoThat(Module):
                     await self._respond(event, f"<blockquote><b>not found:</b> <code>{html.escape(name)}</code></blockquote>", parse_mode="html")
                     return
                 if self._set_plugin_trust(key, level):
+                    self._audit_log(sender, "plugin_trust", f"{key} {level}")
                     await self._respond(event, f"<blockquote><b>{html.escape(key)}</b> → <code>{html.escape(level)}</code></blockquote>", parse_mode="html")
                 else:
                     await self._respond(event, "<blockquote><b>failed</b></blockquote>", parse_mode="html")
@@ -3720,8 +4356,9 @@ class DontDoThat(Module):
                     trust = v.get("trust_level", "sandboxed")
                     author = v.get("author", "?")
                     access = ",".join(v.get("access") or []) or "-"
+                    source = v.get("source", "local")
                     emoji = {"sandboxed": "🔒", "trusted": "🔓", "privileged": "👑"}.get(trust, "?")
-                    out.append(f"{emoji} <b>{html.escape(k)}</b> — <code>{trust}</code> — {html.escape(author)} — <i>access: {html.escape(access)}</i>")
+                    out.append(f"{emoji} <b>{html.escape(k)}</b> — <code>{trust}</code> — {html.escape(author)} — src=<code>{html.escape(source)}</code> — <i>access: {html.escape(access)}</i>")
                 await self._respond(event, "\n".join(out), parse_mode="html")
                 return
 
@@ -3741,7 +4378,8 @@ class DontDoThat(Module):
                     access = ",".join(info.get("access") or []) or "-"
                     source = info.get("source", "local")
                     sha = (info.get("sha256") or "")[:16]
-                    await self._respond(event, f"<blockquote><b>{html.escape(dn)}</b>\n<b>description:</b> {html.escape(info.get('description') or '-')}\n<b>version:</b> <code>{html.escape(info.get('version', '?'))}</code>\n<b>author:</b> <code>{html.escape(info.get('author', '?'))}</code>\n<b>trust:</b> <code>{html.escape(trust)}</code>\n<b>access:</b> <code>{html.escape(access)}</code>\n<b>source:</b> <code>{html.escape(source)}</code>\n<b>sha256:</b> <code>{html.escape(sha)}...</code>\n<b>hooks:</b> <code>{html.escape(','.join(info.get('hooks') or []) or '-')}</code>\n<b>enabled:</b> <code>{info.get('enabled')}</code>\n<b>key:</b> <code>{html.escape(key)}</code></blockquote>", parse_mode="html")
+                    missing = ",".join(info.get("missing_hooks") or []) or "-"
+                    await self._respond(event, f"<blockquote><b>{html.escape(dn)}</b>\n<b>description:</b> {html.escape(info.get('description') or '-')}\n<b>version:</b> <code>{html.escape(info.get('version', '?'))}</code>\n<b>author:</b> <code>{html.escape(info.get('author', '?'))}</code>\n<b>trust:</b> <code>{html.escape(trust)}</code>\n<b>access:</b> <code>{html.escape(access)}</code>\n<b>source:</b> <code>{html.escape(source)}</code>\n<b>sha256:</b> <code>{html.escape(sha)}...</code>\n<b>hooks:</b> <code>{html.escape(','.join(info.get('hooks') or []) or '-')}</code>\n<b>missing:</b> <code>{html.escape(missing)}</code>\n<b>enabled:</b> <code>{info.get('enabled')}</code>\n<b>key:</b> <code>{html.escape(key)}</code></blockquote>", parse_mode="html")
                     return
                 if sub == "remove":
                     self._unregister_plugin_hooks(key)
@@ -3771,6 +4409,7 @@ class DontDoThat(Module):
                 if not q:
                     await self._respond(event, "<blockquote><b>need query.</b></blockquote>", parse_mode="html")
                     return
+                await self._repo_index(force=True)
                 data = await self._repo_index()
                 if not data:
                     await self._respond(event, "<blockquote><b>repo unavailable.</b></blockquote>", parse_mode="html")
@@ -3778,7 +4417,7 @@ class DontDoThat(Module):
                 matches = []
                 ql = q.lower()
                 for pl in data.get("plugins", []):
-                    hay = (pl.get("name", "") + " " + pl.get("description", "") + " " + " ".join(pl.get("tags") or [])).lower()
+                    hay = (str(pl.get("name", "")) + " " + str(pl.get("description", "")) + " " + " ".join(pl.get("tags") or [])).lower()
                     if ql in hay:
                         matches.append(pl)
                 if not matches:
@@ -3786,7 +4425,9 @@ class DontDoThat(Module):
                     return
                 out = ["<blockquote><b>repo search</b></blockquote>"]
                 for pl in matches:
-                    out.append(f"<b>{html.escape(pl.get('name', '?'))}</b> v{html.escape(pl.get('version', '?'))} — <code>{html.escape(pl.get('author', '?'))}</code>")
+                    access = ",".join(pl.get("access") or []) or "-"
+                    mc = pl.get("min_core") or "-"
+                    out.append(f"<b>{html.escape(str(pl.get('name', '?')))}</b> v{html.escape(str(pl.get('version', '?')))} — <code>{html.escape(str(pl.get('author', '?')))}</code> — access=<code>{html.escape(access)}</code> — min_core=<code>{html.escape(mc)}</code>")
                 out.append("")
                 out.append(f"<i>install: <code>{html.escape(p)}dothat plugin install &lt;name&gt;</code></i>")
                 await self._respond(event, "\n".join(out), parse_mode="html")
@@ -3796,11 +4437,13 @@ class DontDoThat(Module):
                 if not self._role_gte(role, "superadmin"):
                     await self._respond(event, "<blockquote><b>superadmin+</b></blockquote>", parse_mode="html")
                     return
-                name = tail.strip()
+                tail_clean, flags = self._parse_flags(tail)
+                name = tail_clean.strip()
                 if not name:
                     await self._respond(event, "<blockquote><b>need name.</b></blockquote>", parse_mode="html")
                     return
-                ok, info = await self._repo_install(name)
+                trust_override = flags.get("trust") if isinstance(flags.get("trust"), str) else None
+                ok, info = await self._repo_install(name, trust_override=trust_override)
                 if ok:
                     self._audit_log(sender, "plugin_install_repo", name)
                     await self._respond(event, f"<blockquote><b>Plugin {html.escape(info.get('declared_name', name))} installed from repo!</b>\n<b>Version:</b> <code>{html.escape(info.get('version', '?'))}</code>\n<b>Trust:</b> <code>{html.escape(info.get('trust_level', 'sandboxed'))}</code></blockquote>", parse_mode="html")
@@ -3860,7 +4503,8 @@ class DontDoThat(Module):
                 except ValueError:
                     pass
             try:
-                rows = c.execute("SELECT ts, source, url, status, elapsed, size, blocked, verdict FROM fetches ORDER BY ts DESC LIMIT ?", (limit,)).fetchall()
+                with self._sqlite_lock:
+                    rows = c.execute("SELECT ts, source, url, status, elapsed, size, blocked, verdict FROM fetches ORDER BY ts DESC LIMIT ?", (limit,)).fetchall()
             except Exception as e:
                 await self._respond(event, f"<blockquote><b>error:</b> <code>{html.escape(str(e))}</code></blockquote>", parse_mode="html")
                 return
@@ -3895,14 +4539,26 @@ class DontDoThat(Module):
                 return
             out = ["<blockquote><b>latency</b></blockquote>"]
             rows = sorted(percs.items(), key=lambda kv: -kv[1]["p95"])
-            for src, p in rows[:20]:
-                out.append(f"<code>{html.escape(src)}</code> — p50 <code>{p['p50']:.2f}s</code> p95 <code>{p['p95']:.2f}s</code> p99 <code>{p['p99']:.2f}s</code> (n={p['n']})")
+            for src, pp in rows[:20]:
+                out.append(f"<code>{html.escape(src)}</code> — p50 <code>{pp['p50']:.2f}s</code> p95 <code>{pp['p95']:.2f}s</code> p99 <code>{pp['p99']:.2f}s</code> n=<code>{pp['n']}</code>")
+            await self._respond(event, "\n".join(out), parse_mode="html")
+            return
+
+        if action == "slow-source":
+            percs = self._latency_percentiles()
+            if not percs:
+                await self._respond(event, "<blockquote><b>no latency data.</b></blockquote>", parse_mode="html")
+                return
+            rows = sorted(percs.items(), key=lambda kv: -kv[1]["p95"])[:15]
+            out = ["<blockquote><b>slow sources</b></blockquote>"]
+            for src, pp in rows:
+                out.append(f"<code>{pp['p95']:.2f}s</code> p95 / <code>{pp['p50']:.2f}s</code> p50 — <code>{html.escape(src)}</code>")
             await self._respond(event, "\n".join(out), parse_mode="html")
             return
 
         if action == "metrics":
             if len(parts) < 2 or parts[1].lower() != "export":
-                await self._respond(event, f"<blockquote><code>{html.escape(p)}dothat metrics export [--since=7d]</code></blockquote>", parse_mode="html")
+                await self._respond(event, f"<blockquote><code>{html.escape(p)}dothat metrics export [--since=7d] [--format=csv|json]</code></blockquote>", parse_mode="html")
                 return
             c = self._sqlite_conn()
             if c is None:
@@ -3914,19 +4570,31 @@ class DontDoThat(Module):
                 n = int(m.group(1))
                 unit = m.group(2)
                 since = time.time() - n * (86400 if unit == "d" else 3600)
+            fmt = "csv"
+            fm = re.search(r"--format=(\w+)", args)
+            if fm:
+                fmt = fm.group(1).lower()
             try:
-                rows = c.execute("SELECT source, COUNT(*), SUM(blocked), AVG(elapsed), AVG(size) FROM fetches WHERE ts>? GROUP BY source", (since,)).fetchall()
+                with self._sqlite_lock:
+                    rows = c.execute("SELECT source, COUNT(*), SUM(blocked), AVG(elapsed), AVG(size) FROM fetches WHERE ts>? GROUP BY source", (since,)).fetchall()
             except Exception:
                 rows = []
             if not rows:
                 await self._respond(event, "<blockquote><b>no data.</b></blockquote>", parse_mode="html")
                 return
-            lines = ["source,total,blocked,avg_elapsed,avg_size"]
-            for r in rows:
-                lines.append(",".join(str(x) for x in r))
-            payload = "\n".join(lines).encode("utf-8")
+            if fmt == "json":
+                payload = json.dumps([{"source": r[0], "total": r[1], "blocked": r[2] or 0, "avg_elapsed": round(r[3] or 0, 3), "avg_size": round(r[4] or 0, 1)} for r in rows], ensure_ascii=False, indent=2).encode("utf-8")
+                fname = "dontdothat_metrics.json"
+            else:
+                buf = io.StringIO()
+                writer = csv.writer(buf)
+                writer.writerow(["source", "total", "blocked", "avg_elapsed", "avg_size"])
+                for r in rows:
+                    writer.writerow([r[0], r[1], r[2] or 0, round(r[3] or 0, 3), round(r[4] or 0, 1)])
+                payload = buf.getvalue().encode("utf-8")
+                fname = "dontdothat_metrics.csv"
             try:
-                await event.client.send_file(event.chat_id, payload, file_name="dontdothat_metrics.csv")
+                await event.client.send_file(event.chat_id, payload, file_name=fname)
             except Exception as e:
                 await self._respond(event, f"<blockquote><b>failed:</b> <code>{html.escape(str(e))}</code></blockquote>", parse_mode="html")
             return
@@ -3944,6 +4612,9 @@ class DontDoThat(Module):
             url = self._build_url(site, query)
             try:
                 page, status, elapsed = await self._fetch_async(url)
+                if self._is_cloudflare(page) or self._is_captcha(page):
+                    await self._respond(event, "<blockquote><b>snapshot failed: page is blocked</b></blockquote>", parse_mode="html")
+                    return
                 self._sqlite_save_snapshot(name, query, url, page)
                 await self._respond(event, f"<blockquote><b>snapshot saved</b>\n<code>{html.escape(name)}</code> / {html.escape(query)} / {len(page)}B</blockquote>", parse_mode="html")
             except Exception as e:
@@ -3961,7 +4632,8 @@ class DontDoThat(Module):
             name = parts[1].lower()
             query = parts[2].strip()
             try:
-                rows = c.execute("SELECT ts, html FROM snapshots WHERE source=? AND query=? ORDER BY ts DESC LIMIT 2", (name, query)).fetchall()
+                with self._sqlite_lock:
+                    rows = c.execute("SELECT ts, html FROM snapshots WHERE source=? AND query=? ORDER BY ts DESC LIMIT 2", (name, query)).fetchall()
             except Exception:
                 rows = []
             if len(rows) < 2:
@@ -3976,18 +4648,36 @@ class DontDoThat(Module):
             return
 
         if action == "note":
-            if len(parts) < 3 or parts[1].lower() != "add":
-                await self._respond(event, f"<blockquote><code>{html.escape(p)}dothat note add &lt;url&gt; &lt;text&gt;</code></blockquote>", parse_mode="html")
+            if len(parts) < 3:
+                await self._respond(event, f"<blockquote><code>{html.escape(p)}dothat note add|remove &lt;url&gt; [text]</code></blockquote>", parse_mode="html")
                 return
-            toks = parts[2].split(maxsplit=1)
-            if len(toks) < 2:
-                await self._respond(event, "<blockquote><b>need url + text</b></blockquote>", parse_mode="html")
+            sub = parts[1].lower()
+            if sub == "add":
+                if len(parts) < 3:
+                    await self._respond(event, "<blockquote><b>need url + text</b></blockquote>", parse_mode="html")
+                    return
+                toks = parts[2].split(maxsplit=1)
+                if len(toks) < 2:
+                    await self._respond(event, "<blockquote><b>need url + text</b></blockquote>", parse_mode="html")
+                    return
+                url, text = toks[0], toks[1]
+                notes = self.cfg.get("notes") or {}
+                notes[url] = {"text": text, "ts": time.time(), "by": sender}
+                self.cfg.set("notes", notes)
+                await self._respond(event, f"<blockquote><b>note saved</b> for <code>{html.escape(url[:100])}</code></blockquote>", parse_mode="html")
                 return
-            url, text = toks[0], toks[1]
-            notes = self.cfg.get("notes") or {}
-            notes[url] = {"text": text, "ts": time.time(), "by": sender}
-            self.cfg.set("notes", notes)
-            await self._respond(event, f"<blockquote><b>note saved</b> for <code>{html.escape(url[:100])}</code></blockquote>", parse_mode="html")
+            if sub == "remove":
+                if len(parts) < 3:
+                    await self._respond(event, "<blockquote><b>need url</b></blockquote>", parse_mode="html")
+                    return
+                url = parts[2].strip()
+                notes = self.cfg.get("notes") or {}
+                if url in notes:
+                    del notes[url]
+                    self.cfg.set("notes", notes)
+                await self._respond(event, f"<blockquote><b>removed:</b> <code>{html.escape(url[:100])}</code></blockquote>", parse_mode="html")
+                return
+            await self._respond(event, f"<blockquote><code>{html.escape(p)}dothat note add|remove &lt;url&gt; [text]</code></blockquote>", parse_mode="html")
             return
 
         if action == "notes":
@@ -3995,10 +4685,20 @@ class DontDoThat(Module):
             if not notes:
                 await self._respond(event, "<blockquote><b>no notes.</b></blockquote>", parse_mode="html")
                 return
+            search = parts[1].lower() if len(parts) > 1 else ""
             out = ["<blockquote><b>notes</b></blockquote>"]
-            for url, data in list(notes.items())[:20]:
+            shown = 0
+            for url, data in list(notes.items()):
+                txt = (url + " " + data.get("text", "")).lower()
+                if search and search not in txt:
+                    continue
                 ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(data.get("ts", 0)))
                 out.append(f"<code>{ts}</code> — {html.escape(url[:80])}\n<i>{html.escape(data.get('text', ''))}</i>")
+                shown += 1
+                if shown >= 20:
+                    break
+            if shown == 0:
+                out.append("<i>no matches.</i>")
             await self._respond(event, "\n".join(out), parse_mode="html")
             return
 
@@ -4033,7 +4733,7 @@ class DontDoThat(Module):
                     nxt = time.strftime("%Y-%m-%d %H:%M", time.localtime(w.get("next_run", 0)))
                     out.append(f"<code>{html.escape(w['id'])}</code> — <code>{html.escape(w['query'])}</code> — {nxt}")
                 out.append("")
-                out.append(f"<i>remove: <code>{html.escape(p)}dothat watch remove &lt;id&gt;</code> | run now: <code>{html.escape(p)}dothat watch run &lt;id&gt;</code></i>")
+                out.append(f"<i>remove: <code>{html.escape(p)}dothat watch remove &lt;id&gt;</code> | run now: <code>{html.escape(p)}dothat watch run &lt;id&gt;</code> | run all: <code>{html.escape(p)}dothat watch run --all</code></i>")
                 await self._respond(event, "\n".join(out), parse_mode="html")
                 return
             if sub == "remove":
@@ -4043,7 +4743,16 @@ class DontDoThat(Module):
                 await self._respond(event, f"<blockquote><b>removed:</b> <code>{html.escape(wid)}</code></blockquote>", parse_mode="html")
                 return
             if sub == "run":
-                wid = tail.strip()
+                tail_clean = tail.strip()
+                if tail_clean in ("--all", "all"):
+                    await self._respond(event, "<blockquote><b>running all..</b></blockquote>", parse_mode="html")
+                    for w in ws:
+                        w["next_run"] = 0
+                    self.cfg.set("watchers", ws)
+                    await self._watch_runner_once(None)
+                    await self._respond(event, "<blockquote><b>done</b></blockquote>", parse_mode="html")
+                    return
+                wid = tail_clean
                 if not wid:
                     await self._respond(event, "<blockquote><b>need id</b></blockquote>", parse_mode="html")
                     return
@@ -4064,12 +4773,14 @@ class DontDoThat(Module):
                 await self._respond(event, "<blockquote><b>forbidden query</b></blockquote>", parse_mode="html")
                 return
             await self._log_search(event, q)
-            ok_limit, reason = self._check_quota(sender, "search")
+            ok_limit, key = self._check_quota_pre(sender, "search")
             if not ok_limit:
-                await self._respond(event, f"<blockquote><b>{html.escape(reason)}</b></blockquote>", parse_mode="html")
+                await self._respond(event, "<blockquote><b>quota exceeded</b></blockquote>", parse_mode="html")
                 return
             await self._respond(event, "<blockquote><b>doing that..</b></blockquote>", parse_mode="html")
-            ok, err = await self._search_everywhere(q, tag=tag_filter, mode=mode, actor=sender)
+            ok, err = await self._search_everywhere(q, tag=tag_filter, mode=mode, actor=sender, chat_id=chat_id)
+            if ok or err:
+                self._check_quota_commit(sender, key)
             await self._send_result(event, q, ok, err)
             return
 
@@ -4117,18 +4828,25 @@ class DontDoThat(Module):
                 await self._respond(event, "<blockquote><b>nothing to retry.</b></blockquote>", parse_mode="html")
                 return
             await self._respond(event, "<blockquote><b>retrying..</b></blockquote>", parse_mode="html")
-            ok, err = await self._search_everywhere(last, actor=sender)
+            self._cache.pop(self._cache_key(last + "||normal", actor=sender), None)
+            ok, err = await self._search_everywhere(last, actor=sender, chat_id=chat_id)
             await self._send_result(event, last, ok, err)
             return
 
         if action == "history":
+            target_actor = None
+            if len(parts) > 1 and self._role_gte(role, "admin"):
+                target_actor = parts[1].strip()
             if not self._history:
                 await self._respond(event, "<blockquote><b>no history.</b></blockquote>", parse_mode="html")
                 return
             lines = ["<blockquote><b>recent queries</b></blockquote>"]
             for h in self._history[-20:][::-1]:
+                if target_actor and h.get("actor") != target_actor:
+                    continue
                 ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(h["ts"]))
-                lines.append(f"<code>{ts}</code> — <code>{html.escape(h['query'])}</code> (<i>{h['hits']} hits, {h['errors']} err</i>)")
+                actor_str = f" <code>{html.escape(h.get('actor', '?'))}</code>" if self._role_gte(role, "admin") else ""
+                lines.append(f"<code>{ts}</code> — <code>{html.escape(h['query'])}</code> (<i>{h['hits']} hits, {h['errors']} err</i>){actor_str}")
             await self._respond(event, "\n".join(lines), parse_mode="html")
             return
 
@@ -4167,7 +4885,7 @@ class DontDoThat(Module):
                 entry["priority"] = flags["priority"]
             ok_limit, reason = self._check_quota(sender, "add")
             if not ok_limit:
-                await self._respond(event, f"<blockquote><b>{html.escape(reason)}</b></blockquote>", parse_mode="html")
+                await self._respond(event, f"<blockquote><b>{html.escape(reason or 'quota exceeded')}</b></blockquote>", parse_mode="html")
                 return
             sites = self._sites()
             sites[name] = entry
@@ -4185,7 +4903,7 @@ class DontDoThat(Module):
             tail = parts[2].strip() if len(parts) > 2 else ""
             tail, flags = self._parse_flags(tail)
             if not tail and name in API_PRESETS:
-                preset = dict(API_PRESETS[name])
+                preset = copy.deepcopy(API_PRESETS[name])
                 preset["host"] = urlparse(preset["url"]).netloc
                 preset["alive"] = None
                 preset["type"] = "api"
@@ -4249,6 +4967,7 @@ class DontDoThat(Module):
                 await self._respond(event, "<blockquote><b>404.</b></blockquote>", parse_mode="html")
                 return
             sites[name]["disabled"] = False
+            self._stats["per_source_fail"][name] = 0
             self._save_sites(sites)
             await self._run_hook("on_sites_change", {"action": "enable", "name": name})
             await self._respond(event, f"<blockquote><b>enabled:</b> <code>{html.escape(name)}</code></blockquote>", parse_mode="html")
@@ -4294,7 +5013,7 @@ class DontDoThat(Module):
             if old not in sites:
                 await self._respond(event, "<blockquote><b>404.</b></blockquote>", parse_mode="html")
                 return
-            sites[new] = dict(sites[old])
+            sites[new] = copy.deepcopy(sites[old])
             self._save_sites(sites)
             await self._run_hook("on_sites_change", {"action": "clone", "old": old, "new": new})
             await self._respond(event, f"<blockquote><b>cloned:</b> <code>{html.escape(old)}</code> → <code>{html.escape(new)}</code></blockquote>", parse_mode="html")
@@ -4415,7 +5134,8 @@ class DontDoThat(Module):
             tags = ",".join(site.get("tags") or []) or "-"
             prio = site.get("priority") or "normal"
             dis = "yes" if site.get("disabled") else "no"
-            await self._respond(event, f"<blockquote><b>{html.escape(name)}</b></blockquote>\n<b>host:</b> <code>{html.escape(site.get('host', '?'))}</code>\n<b>url:</b> <code>{html.escape(site.get('url', ''))}</code>\n<b>param:</b> <code>{html.escape(param)}</code>\n<b>tags:</b> <code>{html.escape(tags)}</code>\n<b>priority:</b> <code>{html.escape(prio)}</code>\n<b>weight:</b> <code>{site.get('weight', 1.0)}</code>\n<b>disabled:</b> <code>{dis}</code>\n<b>status:</b> {mark}", parse_mode="html")
+            weight = site.get("weight", 1.0)
+            await self._respond(event, f"<blockquote><b>{html.escape(name)}</b></blockquote>\n<b>host:</b> <code>{html.escape(site.get('host', '?'))}</code>\n<b>url:</b> <code>{html.escape(site.get('url', ''))}</code>\n<b>param:</b> <code>{html.escape(param)}</code>\n<b>tags:</b> <code>{html.escape(tags)}</code>\n<b>priority:</b> <code>{html.escape(prio)}</code>\n<b>weight:</b> <code>{weight}</code>\n<b>disabled:</b> <code>{dis}</code>\n<b>status:</b> {mark}", parse_mode="html")
             return
 
         if action == "ping":
@@ -4494,6 +5214,25 @@ class DontDoThat(Module):
             out = [f"<blockquote><b>{action} report</b></blockquote>"]
             for name, verdict, elapsed, size in rows:
                 out.append(f"{verdict} <code>{html.escape(name)}</code> — {elapsed}s, {size}B")
+            if action == "doctor":
+                deep = "--deep" in args
+                if deep:
+                    out.append("")
+                    out.append("<blockquote><b>deep checks</b></blockquote>")
+                    c = self._sqlite_conn()
+                    if c is None:
+                        out.append("❌ sqlite disabled")
+                    else:
+                        try:
+                            with self._sqlite_lock:
+                                c.execute("PRAGMA quick_check").fetchone()
+                            out.append("✅ sqlite OK")
+                        except Exception as e:
+                            out.append(f"❌ sqlite: {html.escape(str(e))}")
+                    deps = []
+                    for nm, ok in (("curl_cffi", _HAS_CURL), ("httpx", _HAS_HTTPX), ("pymorphy2", _MORPH is not None)):
+                        deps.append(f"{nm}={'✓' if ok else '✗'}")
+                    out.append(f"deps: <code>{' '.join(deps)}</code>")
             await self._respond(event, "\n".join(out), parse_mode="html")
             return
 
@@ -4547,7 +5286,9 @@ class DontDoThat(Module):
             tl = "\n".join(f"• <code>{html.escape(q)}</code> — <code>{n}</code>" for q, n in top) or "<i>no queries yet</i>"
             per = sorted(s.get("per_source", {}).items(), key=lambda x: -x[1])[:10]
             pl = "\n".join(f"• <code>{html.escape(k)}</code> — <code>{v}</code>" for k, v in per) or "<i>-</i>"
-            await self._respond(event, f"<blockquote><b>stat</b></blockquote>\n<b>queries:</b> <code>{s['total_queries']}</code>\n<b>sources hit:</b> <code>{s['total_sources_hit']}</code>\n<b>plugins:</b> <code>{len(self._plugins)}</code>\n<b>sites:</b> <code>{len(self._sites())}</code>\n<b>top queries:</b>\n{tl}\n<b>top sources:</b>\n{pl}", parse_mode="html")
+            fails = s.get("per_source_fail", {})
+            fails_total = sum(fails.values())
+            await self._respond(event, f"<blockquote><b>stat</b></blockquote>\n<b>queries:</b> <code>{s['total_queries']}</code>\n<b>sources hit:</b> <code>{s['total_sources_hit']}</code>\n<b>fails:</b> <code>{fails_total}</code>\n<b>plugins:</b> <code>{len(self._plugins)}</code>\n<b>sites:</b> <code>{len(self._sites())}</code>\n<b>top queries:</b>\n{tl}\n<b>top sources:</b>\n{pl}", parse_mode="html")
             return
 
         if action == "top":
@@ -4571,8 +5312,20 @@ class DontDoThat(Module):
                     n = max(1, min(200, int(parts[1])))
                 except ValueError:
                     pass
+            action_filter = None
+            actor_filter = None
+            af = re.search(r"--action=(\w+)", args)
+            if af:
+                action_filter = af.group(1)
+            uf = re.search(r"--actor=(\S+)", args)
+            if uf:
+                actor_filter = uf.group(1)
             out = ["<blockquote><b>audit</b></blockquote>"]
             for rec in self._audit[-n:][::-1]:
+                if action_filter and rec.get("action") != action_filter:
+                    continue
+                if actor_filter and rec.get("actor") != actor_filter:
+                    continue
                 ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(rec["ts"]))
                 out.append(f"<code>{ts}</code> <b>{html.escape(rec['action'])}</b> by <code>{html.escape(rec['actor'])}</code> — {html.escape(rec['details'])}")
             await self._respond(event, "\n".join(out), parse_mode="html")
@@ -4580,25 +5333,43 @@ class DontDoThat(Module):
 
         if action == "cfg":
             if len(parts) < 2:
-                await self._respond(event, f"<blockquote><code>{html.escape(p)}dothat cfg &lt;key&gt; [value]</code></blockquote>", parse_mode="html")
+                await self._respond(event, f"<blockquote><code>{html.escape(p)}dothat cfg &lt;key&gt; [value] | &lt;key&gt; --reset</code></blockquote>", parse_mode="html")
                 return
             tail = parts[1] if len(parts) == 2 else f"{parts[1]} {parts[2]}"
-            toks = tail.split(maxsplit=1)
+            tail_clean, flags = self._parse_flags(tail)
+            toks = tail_clean.split(maxsplit=1)
             key = toks[0]
-            if len(toks) == 1:
+            if flags.get("reset"):
+                if not self._role_gte(role, "owner"):
+                    await self._respond(event, "<blockquote><b>owner only</b></blockquote>", parse_mode="html")
+                    return
+                defaults = self.config.get(key)
+                if defaults is None and key not in self.config:
+                    await self._respond(event, "<blockquote><b>no default for key</b></blockquote>", parse_mode="html")
+                    return
+                self.cfg.set(key, defaults)
+                self._audit_log(sender, "cfg_reset", key)
+                await self._respond(event, f"<blockquote><b>{html.escape(key)}</b> reset to <code>{html.escape(json.dumps(defaults, ensure_ascii=False))}</code></blockquote>", parse_mode="html")
+                return
+            if len(toks) == 1 and not flags.get("json"):
                 val = self.cfg.get(key)
                 await self._respond(event, f"<blockquote><b>{html.escape(key)}</b> = <code>{html.escape(json.dumps(val, ensure_ascii=False))}</code></blockquote>", parse_mode="html")
                 return
             if not self._role_gte(role, "owner"):
                 await self._respond(event, "<blockquote><b>owner only</b></blockquote>", parse_mode="html")
                 return
-            raw = toks[1].strip()
+            raw = toks[1].strip() if len(toks) > 1 else ""
             try:
                 parsed_val = json.loads(raw)
             except Exception:
                 parsed_val = raw
             self.cfg.set(key, parsed_val)
-            self._audit_log(sender, "cfg", f"{key}={raw}")
+            self._audit_log(sender, "cfg", f"{key}={raw[:100]}")
+            if key == "plugins_repo":
+                self._repo_index_cache = {}
+            if key == "max_parallel":
+                self._sem = None
+                self._sem_limit = None
             await self._respond(event, f"<blockquote><b>{html.escape(key)}</b> set to <code>{html.escape(str(parsed_val))}</code></blockquote>", parse_mode="html")
             return
 
@@ -4612,13 +5383,16 @@ class DontDoThat(Module):
                 data = json.dumps(sites, ensure_ascii=False, indent=2).encode("utf-8")
                 fname = "dontdothat_sites.json"
             elif fmt == "jsonl":
-                data = "\n".join(json.dumps({k: v}, ensure_ascii=False) for k, v in sites.items()).encode("utf-8")
+                lines = [json.dumps({k: v}, ensure_ascii=False) for k, v in sites.items()]
+                data = "\n".join(lines).encode("utf-8")
                 fname = "dontdothat_sites.jsonl"
             elif fmt == "csv":
-                lines = ["name,url,host,param,tags,priority,disabled,type"]
+                buf = io.StringIO()
+                writer = csv.writer(buf)
+                writer.writerow(["name", "url", "host", "param", "tags", "priority", "disabled", "type"])
                 for n, s in sites.items():
-                    lines.append(",".join([n, s.get("url", ""), s.get("host", ""), s.get("param", ""), "|".join(s.get("tags") or []), s.get("priority", ""), str(bool(s.get("disabled"))), s.get("type", "html")]))
-                data = "\n".join(lines).encode("utf-8")
+                    writer.writerow([n, s.get("url", ""), s.get("host", ""), s.get("param", ""), "|".join(s.get("tags") or []), s.get("priority", ""), str(bool(s.get("disabled"))), s.get("type", "html")])
+                data = buf.getvalue().encode("utf-8")
                 fname = "dontdothat_sites.csv"
             elif fmt == "md":
                 lines = ["# DontDoThat sources", ""]
@@ -4627,7 +5401,7 @@ class DontDoThat(Module):
                 data = "\n".join(lines).encode("utf-8")
                 fname = "dontdothat_sites.md"
             elif fmt == "html":
-                rows = "".join(f"<tr><td>{html.escape(n)}</td><td>{html.escape(s.get('url', ''))}</td></tr>" for n, s in sites.items())
+                rows = "".join(f"<tr><td>{html.escape(n)}</td><td>{html.escape(s.get('url', ''))}</td><td>{html.escape(s.get('host', ''))}</td></tr>" for n, s in sites.items())
                 data = f"<html><body><table border=1>{rows}</table></body></html>".encode("utf-8")
                 fname = "dontdothat_sites.html"
             elif fmt == "misp":
@@ -4638,6 +5412,12 @@ class DontDoThat(Module):
                 await self._respond(event, "<blockquote><b>format must be json|jsonl|csv|md|html|misp</b></blockquote>", parse_mode="html")
                 return
             try:
+                if len(data) < 4000:
+                    try:
+                        await self._respond(event, f"<blockquote><b>export ({html.escape(fname)})</b></blockquote>\n<pre>{html.escape(data.decode('utf-8'))}</pre>", parse_mode="html")
+                        return
+                    except Exception:
+                        pass
                 await event.client.send_file(event.chat_id, data, file_name=fname)
             except Exception as e:
                 await self._respond(event, f"<blockquote><b>export failed:</b> <code>{html.escape(str(e))}</code></blockquote>", parse_mode="html")
@@ -4658,17 +5438,21 @@ class DontDoThat(Module):
             try:
                 data = await reply.download_media(bytes)
                 parsed = json.loads(data.decode("utf-8"))
-                if not isinstance(parsed, dict):
-                    raise ValueError("not a dict")
             except Exception as e:
                 await self._respond(event, f"<blockquote><b>import failed:</b> <code>{html.escape(str(e))}</code></blockquote>", parse_mode="html")
                 return
             sites = self._sites()
             added = 0
-            for name, entry in parsed.items():
-                if isinstance(entry, dict) and "url" in entry and self._is_ssrf_safe(entry["url"]):
-                    sites[name] = entry
-                    added += 1
+            if isinstance(parsed, dict):
+                for name, entry in parsed.items():
+                    if isinstance(entry, dict) and "url" in entry and self._is_ssrf_safe(entry["url"]):
+                        sites[name] = entry
+                        added += 1
+            elif isinstance(parsed, list):
+                for entry in parsed:
+                    if isinstance(entry, dict) and "url" in entry and "name" in entry and self._is_ssrf_safe(entry["url"]):
+                        sites[entry["name"]] = entry
+                        added += 1
             self._save_sites(sites)
             await self._run_hook("on_sites_change", {"action": "import", "count": added})
             await self._respond(event, f"<blockquote><b>imported:</b> <code>{added}</code></blockquote>", parse_mode="html")
@@ -4676,7 +5460,7 @@ class DontDoThat(Module):
 
         if action == "test":
             if len(parts) < 2:
-                await self._respond(event, f"<blockquote><code>{html.escape(p)}dothat test &lt;url&gt; [--param=q]</code></blockquote>", parse_mode="html")
+                await self._respond(event, f"<blockquote><code>{html.escape(p)}dothat test &lt;url&gt; [--param=q] [--save]</code></blockquote>", parse_mode="html")
                 return
             tail = parts[1] if len(parts) == 2 else f"{parts[1]} {parts[2]}"
             tail, flags = self._parse_flags(tail)
@@ -4699,15 +5483,31 @@ class DontDoThat(Module):
             size = len(page)
             if self._is_cloudflare(page):
                 verdict = "☁ cloudflare (refused)"
+                ok_flag = False
             elif self._is_captcha(page):
-                verdict = "🛡 captcha (bypass available)"
+                verdict = "🛡 captcha"
+                ok_flag = False
             elif self._looks_js_required(page, page):
-                verdict = "⚠ needs js (jina fallback)"
+                verdict = "⚠ needs js"
+                ok_flag = False
             elif status >= 400:
                 verdict = f"🔴 http {status}"
+                ok_flag = False
             else:
                 verdict = "✅ ok"
+                ok_flag = True
             title, text, links, files, images, meta = self._extract(page, test_url)
+            if flags.get("save") and ok_flag:
+                name = re.sub(r"[^\w]+", "_", urlparse(test_url).netloc).strip("_").lower() or "test_src"
+                sites = self._sites()
+                entry = {"url": url, "host": urlparse(url).netloc, "alive": True, "priority": "normal", "tags": ["web"]}
+                if "param" in flags and isinstance(flags["param"], str):
+                    entry["param"] = flags["param"]
+                sites[name] = entry
+                self._save_sites(sites)
+                await self._run_hook("on_sites_change", {"action": "add", "name": name, "site": entry})
+                await self._respond(event, f"<blockquote><b>saved as</b> <code>{html.escape(name)}</code></blockquote>", parse_mode="html")
+                return
             await self._respond(event, f"<blockquote><b>test result</b></blockquote>\n<b>url:</b> <code>{html.escape(test_url)}</code>\n<b>status:</b> <code>{status}</code>\n<b>elapsed:</b> <code>{elapsed}s</code>\n<b>size:</b> <code>{size}B</code>\n<b>title:</b> {html.escape(title or '-')}\n<b>links:</b> <code>{len(links)}</code> | <b>files:</b> <code>{len(files)}</code> | <b>images:</b> <code>{len(images)}</code>\n<b>verdict:</b> {verdict}\n<i>{html.escape(text[:400])}</i>", parse_mode="html")
             return
 
@@ -4722,12 +5522,14 @@ class DontDoThat(Module):
 
         await self._log_search(event, args)
         self._audit_log(sender, "search", args)
-        ok_limit, reason = self._check_quota(sender, "search")
+        ok_limit, key = self._check_quota_pre(sender, "search")
         if not ok_limit:
-            await self._respond(event, f"<blockquote><b>{html.escape(reason)}</b></blockquote>", parse_mode="html")
+            await self._respond(event, "<blockquote><b>quota exceeded</b></blockquote>", parse_mode="html")
             return
         await self._respond(event, "<blockquote><b>doing that..</b></blockquote>", parse_mode="html")
-        ok, err = await self._search_everywhere(args, tag=tag_filter, actor=sender)
+        ok, err = await self._search_everywhere(args, tag=tag_filter, actor=sender, chat_id=chat_id)
+        if ok or err:
+            self._check_quota_commit(sender, key)
         if to_chat:
             try:
                 text, _ = self._format_results(args, ok)
