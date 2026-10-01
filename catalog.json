@@ -35,6 +35,12 @@
       "file": "DontDoThat.py",
       "description": "Public web search with roles, plugins, trust, morfology, boolean ops, readability, backup, audit.",
       "url": "https://raw.githubusercontent.com/flexOwnerAL/repo-TETKO-modules/main/DontDoThat.py"
+    },
+    {
+      "name": "Audata",
+      "file": "Audata.py",
+      "description": "Music metadata editor",
+      "url": "https://raw.githubusercontent.com/flexOwnerAL/repo-TETKO-modules/main/Audata.py"
     }
   ]
 }
